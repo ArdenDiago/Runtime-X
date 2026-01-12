@@ -1,3 +1,3 @@
-module Runtime-X
+module runtimex
 
 go 1.25.5
