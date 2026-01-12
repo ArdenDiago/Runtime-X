@@ -33,5 +33,5 @@ func main() {
 		CreatedAt: time.Now(),
 	})
 
-	select {}
+	time.Sleep(10 * time.Second)
 }
