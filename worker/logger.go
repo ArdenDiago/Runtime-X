@@ -1,7 +1,14 @@
-package main
+package worker
 
-import "log"
+import (
+	"log"
+)
 
-func InitLogger() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+func LogJob(job *Job) {
+	log.Printf(
+		"Job %s | Status=%s | Error=%s",
+		job.ID,
+		job.Status,
+		job.Error,
+	)
 }

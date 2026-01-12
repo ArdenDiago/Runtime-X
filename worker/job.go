@@ -1,21 +1,22 @@
-package main
+package worker
 
 import "time"
 
 type JobStatus string
 
 const (
-	JobRunning   JobStatus = "running"
-	JobCrashed   JobStatus = "crashed"
-	JobCompleted JobStatus = "completed"
+	StatusQueued    JobStatus = "QUEUED"
+	StatusRunning   JobStatus = "RUNNING"
+	StatusCompleted JobStatus = "COMPLETED"
+	StatusFailed    JobStatus = "FAILED"
 )
 
 type Job struct {
 	ID        string
 	Command   string
-	Args      []string
 	Status    JobStatus
+	CreatedAt time.Time
 	StartedAt time.Time
 	EndedAt   time.Time
-	ExitCode  int
+	Error     string
 }
