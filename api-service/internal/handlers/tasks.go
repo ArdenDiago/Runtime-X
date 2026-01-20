@@ -3,16 +3,19 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"runtimex/api-service/internal/models"
 	"runtimex/api-service/internal/scheduler"
+	"runtimex/worker"
 
 	"github.com/google/uuid"
 )
 
 type TaskHandler struct {
 	Scheduler *scheduler.Scheduler
+	Queue     *worker.JobQueue
 }
 
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
@@ -41,4 +44,33 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.Scheduler.ListTasks())
+}
+
+func (h *TaskHandler) ExecuteTask(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimSuffix(r.URL.Path, "/execute")
+	id := strings.TrimPrefix(path, "/tasks/")
+
+	task, exists := h.Scheduler.GetTask(id)
+	if !exists {
+		http.Error(w, "task not found", http.StatusNotFound)
+		return
+	}
+
+	task.Status = models.TaskRunning
+	h.Scheduler.UpdateTask(task)
+
+	job := &worker.Job{
+		ID:        task.ID,
+		Command:   task.Command,
+		Status:    worker.StatusQueued,
+		CreatedAt: task.CreatedAt,
+	}
+
+	if err := h.Queue.Enqueue(job); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte("Task execution started"))
 }
