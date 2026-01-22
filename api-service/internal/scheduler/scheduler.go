@@ -32,3 +32,18 @@ func (s *Scheduler) ListTasks() []models.Task {
 	}
 	return result
 }
+
+func (s *Scheduler) GetTask(id string) (models.Task, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, exists := s.tasks[id]
+	return task, exists
+}
+
+func (s *Scheduler) UpdateTask(task models.Task) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.tasks[task.ID] = task
+}
