@@ -37,6 +37,18 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	h.Scheduler.AddTask(task)
 
+	// Enqueue job for immediate execution
+	job := &worker.Job{
+		ID:        task.ID,
+		Command:   task.Command,
+		Status:    worker.StatusQueued,
+		CreatedAt: task.CreatedAt,
+	}
+	if err := h.Queue.Enqueue(job); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(task)
 }
