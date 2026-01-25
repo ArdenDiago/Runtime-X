@@ -1,37 +1,19 @@
 package main
 
 import (
-	"time"
+	"log"
 
-	"runtimex/worker"
+	"runtimex/internal/queue"
+	"runtimex/internal/worker"
 )
 
 func main() {
-	queue := worker.NewJobQueue(10)
+	log.Println("Worker started")
+
+	q := queue.NewJobQueue(10)
 	pool := worker.NewWorkerPool(3)
 
-	worker.StartScheduler(queue, pool)
+	worker.StartScheduler(q, pool)
 
-	queue.Enqueue(&worker.Job{
-		ID:        "1",
-		Command:   "echo Job 1",
-		Status:    worker.StatusQueued,
-		CreatedAt: time.Now(),
-	})
-
-	queue.Enqueue(&worker.Job{
-		ID:        "2",
-		Command:   "sleep 2 && echo Job 2",
-		Status:    worker.StatusQueued,
-		CreatedAt: time.Now(),
-	})
-
-	queue.Enqueue(&worker.Job{
-		ID:        "3",
-		Command:   "echo Job 3",
-		Status:    worker.StatusQueued,
-		CreatedAt: time.Now(),
-	})
-
-	time.Sleep(10 * time.Second)
+	select {}
 }
