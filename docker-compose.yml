@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  go:
+    build:
+      context: .
+      dockerfile: docker_files/go.dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/usr/src/app
