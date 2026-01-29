@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"runtimex/cmd/api/docker"
+	dockerRoutes "runtimex/cmd/api/docker"
 )
 
 func main() {
@@ -20,8 +20,8 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	// 👇 Mount all /docker routes here
-	mux.Handle("/docker/", docker.Router())
+	// ✅ NOTE THE TRAILING SLASH
+	mux.Handle("/docker/", dockerRoutes.Router())
 
 	log.Println("API started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))

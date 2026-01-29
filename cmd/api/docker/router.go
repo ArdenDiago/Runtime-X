@@ -1,14 +1,18 @@
 package docker
 
-import "net/http"
+import (
+	"net/http"
 
-// Router returns a handler for all /docker routes
+	imageRoutes "runtimex/cmd/api/docker/image"
+	tagRoutes "runtimex/cmd/api/docker/tags"
+)
+
 func Router() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/docker/images", GetImages)
-	// future:
-	// mux.HandleFunc("/docker/tags", GetTags)
+	// IMPORTANT: NO /docker prefix here
+	mux.HandleFunc("/images", imageRoutes.GetImages)
+	mux.HandleFunc("/images/", tagRoutes.GetImageTags)
 
 	return mux
 }
