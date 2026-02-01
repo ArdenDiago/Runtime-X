@@ -37,7 +37,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	h.Scheduler.AddTask(task)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json") //sets key value pair in header
 	json.NewEncoder(w).Encode(task)
 }
 
