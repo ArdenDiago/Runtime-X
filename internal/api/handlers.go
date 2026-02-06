@@ -6,16 +6,20 @@ import (
 	"strings"
 	"time"
 
-	"runtimex/api-service/internal/models"
-	"runtimex/api-service/internal/scheduler"
-	"runtimex/worker"
+	worker "runtimex/internal/core"
+	"runtimex/internal/queue"
 
 	"github.com/google/uuid"
 )
 
 type TaskHandler struct {
-	Scheduler *scheduler.Scheduler
-	Queue     *worker.JobQueue
+	queue *queue.JobQueue
+}
+
+func NewTaskHandler(q *queue.JobQueue) *TaskHandler {
+	return &TaskHandler{
+		queue: q,
+	}
 }
 
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
@@ -28,34 +32,28 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := models.Task{
+	job := &worker.Job{
 		ID:        uuid.New().String(),
 		Command:   req.Command,
-		Status:    models.TaskPending,
+		Status:    worker.StatusQueued,
 		CreatedAt: time.Now(),
 	}
 
-	h.Scheduler.AddTask(task)
-
-	// Enqueue job for immediate execution
-	job := &worker.Job{
-		ID:        task.ID,
-		Command:   task.Command,
-		Status:    worker.StatusQueued,
-		CreatedAt: task.CreatedAt,
-	}
-	if err := h.Queue.Enqueue(job); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := h.queue.Enqueue(job); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json") //sets key value pair in header
-	json.NewEncoder(w).Encode(task)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(job)
 }
 
 func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
+	// Intentionally simple for now
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(h.Scheduler.ListTasks())
+	json.NewEncoder(w).Encode([]string{
+		"listing not implemented yet",
+	})
 }
 
 func (h *TaskHandler) ExecuteTask(w http.ResponseWriter, r *http.Request) {
