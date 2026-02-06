@@ -1,1 +1,27 @@
+# Build artifacts
 tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage tool
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated Dockerfiles (keep sample)
+docker_files/*.dockerfile
+!docker_files/go.dockerfile

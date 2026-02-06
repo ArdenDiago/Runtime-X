@@ -24,7 +24,7 @@ func GetDockerImageTags(image string, limit int) ([]string, error) {
 		"https://hub.docker.com/v2/repositories/library/%s/tags",
 		image,
 	)
-	log.Fatal(url)
+	log.Println(url)
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}

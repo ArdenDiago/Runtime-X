@@ -18,12 +18,12 @@ func GetImageTags(w http.ResponseWriter, r *http.Request) {
 	// Extract image name from URL
 	// /docker/images/golang/tags → golang
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) != 4 || parts[3] != "tags" {
+	// Accept /images/{image}/tags and /images/{image}/tags/
+	if len(parts) < 3 || parts[0] != "images" || parts[2] != "tags" {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
-
-	image := parts[2]
+	image := parts[1]
 
 	tags, err := utility.GetDockerImageTags(image, 0)
 	if err != nil {

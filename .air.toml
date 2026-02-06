@@ -1,11 +1,22 @@
-root = "/usr/src/app"
+root = "."
 tmp_dir = "tmp"
 
 [build]
-cmd = "go build -o ./tmp/api ./cmd/main.go"
-entrypoint = "tmp/api"
-include_ext = ["go"]
-exclude_dir = ["tmp", "vendor"]
+cmd = "go build -o ./tmp/main ./cmd/main.go"
+bin = "./tmp/main"
+include_ext = ["go", "tpl", "tmpl", "html"]
+exclude_dir = ["tmp", "vendor", "frontend", "docker_files", ".git"]
+exclude_regex = ["_test.go"]
+delay = 1000
 
 [log]
 time = true
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+clean_on_exit = true
