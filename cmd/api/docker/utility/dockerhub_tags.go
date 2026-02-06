@@ -3,6 +3,7 @@ package utility
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -20,10 +21,10 @@ func GetDockerImageTags(image string, limit int) ([]string, error) {
 	var tags []string
 
 	url := fmt.Sprintf(
-		"https://hub.docker.com/v2/repositories/library/%s/tags/?page_size=100",
+		"https://hub.docker.com/v2/repositories/library/%s/tags",
 		image,
 	)
-
+	log.Fatal(url)
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}

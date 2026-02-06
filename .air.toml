@@ -1,9 +1,9 @@
-root = "."
+root = "/usr/src/app"
 tmp_dir = "tmp"
 
 [build]
-cmd = "go build -buildvcs=false -o ./tmp/api ./cmd/api"
-bin = "tmp/api"
+cmd = "go build -o ./tmp/api ./cmd/main.go"
+entrypoint = "tmp/api"
 include_ext = ["go"]
 exclude_dir = ["tmp", "vendor"]
 
