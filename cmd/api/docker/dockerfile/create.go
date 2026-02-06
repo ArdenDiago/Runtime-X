@@ -8,29 +8,42 @@ import (
 
 	"runtimex/internal/core"
 	dockerValidator "runtimex/internal/docker"
+	"runtimex/internal/queue"
 
 	"github.com/google/uuid"
 )
 
 // CreateDockerfileRequest represents the request body for creating a Dockerfile
 type CreateDockerfileRequest struct {
-	Image           string          `json:"image"`
-	Tag             string          `json:"tag"`
-	CopyPaths       []core.CopyPath `json:"copyPaths"`
-	RunCommands     []string        `json:"runCommands"`
-	CmdCommand      []string        `json:"cmdCommand"`
-	WorkDir         string          `json:"workDir,omitempty"`
-	SkipHubValidation bool          `json:"skipHubValidation,omitempty"`
+	Image             string          `json:"image"`
+	Tag               string          `json:"tag"`
+	CopyPaths         []core.CopyPath `json:"copyPaths"`
+	RunCommands       []string        `json:"runCommands"`
+	CmdCommand        []string        `json:"cmdCommand"`
+	WorkDir           string          `json:"workDir,omitempty"`
+	SkipHubValidation bool            `json:"skipHubValidation,omitempty"`
+	Execute           bool            `json:"execute,omitempty"`
 }
 
 // CreateDockerfileResponse includes config and any validation warnings
 type CreateDockerfileResponse struct {
 	*core.DockerfileConfig
 	Warnings []string `json:"warnings,omitempty"`
+	Queued   bool     `json:"queued,omitempty"`
+}
+
+// DockerfileHandler holds dependencies for Dockerfile endpoints
+type DockerfileHandler struct {
+	Queue *queue.DockerJobQueue
+}
+
+// NewDockerfileHandler creates a new handler with the given queue
+func NewDockerfileHandler(q *queue.DockerJobQueue) *DockerfileHandler {
+	return &DockerfileHandler{Queue: q}
 }
 
 // CreateDockerfile handles POST /docker/dockerfile
-func CreateDockerfile(w http.ResponseWriter, r *http.Request) {
+func (h *DockerfileHandler) CreateDockerfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -105,10 +118,21 @@ func CreateDockerfile(w http.ResponseWriter, r *http.Request) {
 
 	config.FilePath = filePath
 
+	// Queue for execution if requested
+	queued := false
+	if req.Execute && h.Queue != nil {
+		if err := h.Queue.Enqueue(config); err != nil {
+			warnings = append(warnings, "queue failed: "+err.Error())
+		} else {
+			queued = true
+		}
+	}
+
 	// Send response with warnings
 	response := CreateDockerfileResponse{
 		DockerfileConfig: config,
 		Warnings:         warnings,
+		Queued:           queued,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -116,7 +140,7 @@ func CreateDockerfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetDockerfile handles GET /docker/dockerfile/{id}
-func GetDockerfile(w http.ResponseWriter, r *http.Request) {
+func (h *DockerfileHandler) GetDockerfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -189,4 +213,3 @@ func GenerateDockerfile(config *core.DockerfileConfig) string {
 
 	return content
 }
-
