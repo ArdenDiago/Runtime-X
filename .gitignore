@@ -23,5 +23,6 @@ tmp/
 Thumbs.db
 
 # Generated Dockerfiles (keep sample)
-docker_files/*.dockerfile
-!docker_files/go.dockerfile
+docker_files/
+docker_files/go.dockerfile
+
