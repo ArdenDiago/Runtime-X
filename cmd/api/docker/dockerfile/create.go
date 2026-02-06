@@ -2,6 +2,7 @@ package dockerfile
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,14 +16,18 @@ import (
 
 // CreateDockerfileRequest represents the request body for creating a Dockerfile
 type CreateDockerfileRequest struct {
-	Image             string          `json:"image"`
-	Tag               string          `json:"tag"`
-	CopyPaths         []core.CopyPath `json:"copyPaths"`
-	RunCommands       []string        `json:"runCommands"`
-	CmdCommand        []string        `json:"cmdCommand"`
-	WorkDir           string          `json:"workDir,omitempty"`
-	SkipHubValidation bool            `json:"skipHubValidation,omitempty"`
-	Execute           bool            `json:"execute,omitempty"`
+	Image             string            `json:"image"`
+	Tag               string            `json:"tag"`
+	GitRepo           string            `json:"gitRepo,omitempty"`
+	GitBranch         string            `json:"gitBranch,omitempty"`
+	CopyPaths         []core.CopyPath   `json:"copyPaths"`
+	EnvVars           map[string]string `json:"envVars,omitempty"`
+	RunCommands       []string          `json:"runCommands"`
+	CmdCommand        []string          `json:"cmdCommand"`
+	WorkDir           string            `json:"workDir,omitempty"`
+	ExposePort        int               `json:"exposePort,omitempty"`
+	SkipHubValidation bool              `json:"skipHubValidation,omitempty"`
+	Execute           bool              `json:"execute,omitempty"`
 }
 
 // CreateDockerfileResponse includes config and any validation warnings
@@ -65,10 +70,14 @@ func (h *DockerfileHandler) CreateDockerfile(w http.ResponseWriter, r *http.Requ
 		ID:          uuid.New().String(),
 		Image:       req.Image,
 		Tag:         req.Tag,
+		GitRepo:     req.GitRepo,
+		GitBranch:   req.GitBranch,
 		CopyPaths:   req.CopyPaths,
+		EnvVars:     req.EnvVars,
 		RunCommands: req.RunCommands,
 		CmdCommand:  req.CmdCommand,
 		WorkDir:     req.WorkDir,
+		ExposePort:  req.ExposePort,
 		Status:      core.ConfigPending,
 	}
 
@@ -178,9 +187,27 @@ func GenerateDockerfile(config *core.DockerfileConfig) string {
 	// FROM instruction
 	content += "FROM " + config.Image + ":" + config.Tag + "\n\n"
 
+	// ENV instructions
+	for key, value := range config.EnvVars {
+		content += "ENV " + key + "=" + value + "\n"
+	}
+	if len(config.EnvVars) > 0 {
+		content += "\n"
+	}
+
 	// WORKDIR instruction (optional)
 	if config.WorkDir != "" {
 		content += "WORKDIR " + config.WorkDir + "\n\n"
+	}
+
+	// Clone Git repo if specified
+	if config.GitRepo != "" {
+		branch := config.GitBranch
+		if branch == "" {
+			branch = "main"
+		}
+		content += "RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*\n"
+		content += "RUN git clone --branch " + branch + " --single-branch " + config.GitRepo + " .\n\n"
 	}
 
 	// COPY instructions
@@ -197,6 +224,11 @@ func GenerateDockerfile(config *core.DockerfileConfig) string {
 	}
 	if len(config.RunCommands) > 0 {
 		content += "\n"
+	}
+
+	// EXPOSE port if specified
+	if config.ExposePort > 0 {
+		content += "EXPOSE " + fmt.Sprintf("%d", config.ExposePort) + "\n\n"
 	}
 
 	// CMD instruction
