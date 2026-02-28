@@ -28,7 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User runs `rtx run yes` and output appears line-by-line in real time (not buffered until the process ends)
   4. User runs `rtx run nonexistent-command` and sees a clear "command not found" message with exit code 127
   5. After any `rtx run` invocation completes, no zombie processes appear in `ps aux | grep Z`
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Process runner core package (internal/process/runner.go)
+- [ ] 01-02-PLAN.md — CLI entry point, binary build, and Phase 1 end-to-end verification
 
 ### Phase 2: Signal Forwarding
 **Goal**: Users can interrupt or terminate `rtx`-managed processes and receive correct exit behavior in all signal scenarios
@@ -58,6 +62,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Process Foundation | 0/TBD | Not started | - |
+| 1. Process Foundation | 0/2 | Not started | - |
 | 2. Signal Forwarding | 0/TBD | Not started | - |
 | 3. Tests and Validation | 0/TBD | Not started | - |
