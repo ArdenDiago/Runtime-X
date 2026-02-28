@@ -52,7 +52,7 @@ Requirements for v0 release. Each maps to roadmap phases.
 - [x] **TEST-03**: Unit test: process spawning does not leave zombie processes
 - [x] **TEST-04**: Unit test: signal forwarding delivers signal to child
 - [x] **TEST-05**: Unit test: "command not found" returns exit code 127
-- [ ] **TEST-06**: Manual validation: `rtx run yes` outputs line-by-line (real-time, not buffered)
+- [x] **TEST-06**: Manual validation: `rtx run yes` outputs line-by-line (real-time, not buffered)
 
 ## v2 Requirements
 
@@ -122,7 +122,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-03 | Phase 3 | Complete |
 | TEST-04 | Phase 3 | Complete |
 | TEST-05 | Phase 3 | Complete |
-| TEST-06 | Phase 3 | Pending |
+| TEST-06 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 26 total
@@ -131,4 +131,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after 03-01-PLAN.md — Phase 3 plan 01 complete; TEST-01 through TEST-05 verified via go test -race passing runner_test.go (exit codes 1/42/127, zombie prevention, SIGTERM forwarding)*
+*Last updated: 2026-02-28 after 03-02-PLAN.md — Phase 3 plan 02 complete; TEST-06 human-verified (real-time streaming confirmed); all v1 requirements complete*

@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Process Foundation** - CLI entry point, process spawning, I/O streaming, exit code propagation, and error handling
 - [x] **Phase 2: Signal Forwarding** - SIGINT/SIGTERM interception, forwarding to child, graceful shutdown sequence
-- [ ] **Phase 3: Tests and Validation** - Unit tests, signal-killed exit code emulation, manual validation
+- [x] **Phase 3: Tests and Validation** - Unit tests, signal-killed exit code emulation, manual validation
 
 ## Phase Details
 
@@ -61,7 +61,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Unit tests for exit codes, zombie prevention, and signal delivery (runner_test.go)
-- [ ] 03-02-PLAN.md — Binary rebuild, full test suite run, and manual real-time streaming validation (TEST-06)
+- [x] 03-02-PLAN.md — Binary rebuild, full test suite run, and manual real-time streaming validation (TEST-06)
 
 ## Progress
 
@@ -72,4 +72,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Process Foundation | 2/2 | Complete   | 2026-02-28 |
 | 2. Signal Forwarding | 2/2 | Complete    | 2026-02-28 |
-| 3. Tests and Validation | 1/2 | In Progress | - |
+| 3. Tests and Validation | 2/2 | Complete     | 2026-02-28 |
