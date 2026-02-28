@@ -5,34 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** Phase 2 — Signal Forwarding
+**Current focus:** Phase 3 — Scheduler Foundation
 
 ## Current Position
 
-Phase: 2 of 3 (Signal Forwarding)
-Plan: 1 of 2 in current phase — COMPLETE
-Status: Phase 2 Plan 1 complete, ready for Phase 2 Plan 2
-Last activity: 2026-02-28 — Plan 02-01 complete: SIGINT/SIGTERM forwarding + POSIX 128+N exit codes
+Phase: 2 of 3 (Signal Forwarding) — COMPLETE
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 2 complete — all signal forwarding behavior verified; ready for Phase 3
+Last activity: 2026-02-28 — Plan 02-02 complete: end-to-end behavioral verification of signal forwarding (all 7 checks passed, human-approved)
 
-Progress: [███░░░░░░░] 50% (3/6 plans across 3 phases)
+Progress: [█████░░░░░] 67% (4/6 plans across 3 phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 7.5 min
-- Total execution time: 0.25 hours
+- Total plans completed: 4
+- Average duration: 5.75 min
+- Total execution time: ~0.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-process-foundation | 2/2 | 15 min | 7.5 min |
-| 02-signal-forwarding | 1/2 | 3 min | 3 min |
+| 02-signal-forwarding | 2/2 | 8 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min), 01-02 (10 min), 02-01 (3 min)
-- Trend: accelerating (familiar patterns, minimal new surface area)
+- Last 5 plans: 01-01 (5 min), 01-02 (10 min), 02-01 (3 min), 02-02 (5 min)
+- Trend: consistent (verification plans faster than implementation plans)
 
 *Updated after each plan completion*
 
@@ -58,6 +58,7 @@ Recent decisions affecting current work:
 - [Phase 02-signal-forwarding 02-01]: waitErr = <-doneCh blocks in signal case after forward — zombie prevention + correct exit code from populated cmd.ProcessState
 - [Phase 02-signal-forwarding 02-01]: os.ErrProcessDone swallowed silently — benign natural-exit race, logging would be misleading noise
 - [Phase 02-signal-forwarding 02-01]: resolveExitCode accepts *os.ProcessState for 128+N via WaitStatus.Signaled()
+- [Phase 02-signal-forwarding 02-02]: Phase 2 behavioral verification complete — all 7 checks passed (SIGINT 130, SIGTERM 143, natural exit 42, no zombies, command-not-found 127, signal log, interactive Ctrl+C); human-approved
 
 ### Pending Todos
 
@@ -71,6 +72,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 02-01-PLAN.md — SIGINT/SIGTERM forwarding + POSIX 128+N exit codes; all 7 requirements satisfied
+Stopped at: Completed 02-02-PLAN.md — Phase 2 complete; all signal forwarding behavior verified end-to-end (human-approved)
 Resume file: None
-Next: Phase 2 Plan 2 — 02-02-PLAN.md (check plan for details)
+Next: Phase 3 — Scheduler Foundation (03-01-PLAN.md)

@@ -13,7 +13,7 @@ Three phases deliver a correct, deterministic process runner. Phase 1 proves the
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Process Foundation** - CLI entry point, process spawning, I/O streaming, exit code propagation, and error handling
-- [ ] **Phase 2: Signal Forwarding** - SIGINT/SIGTERM interception, forwarding to child, graceful shutdown sequence
+- [x] **Phase 2: Signal Forwarding** - SIGINT/SIGTERM interception, forwarding to child, graceful shutdown sequence
 - [ ] **Phase 3: Tests and Validation** - Unit tests, signal-killed exit code emulation, manual validation
 
 ## Phase Details
@@ -47,7 +47,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Signal interception, forwarding, and POSIX 128+N exit code emulation in runner.go
-- [ ] 02-02-PLAN.md — Binary rebuild and behavioral verification (signal log, exit codes 130/143, regressions)
+- [x] 02-02-PLAN.md — Binary rebuild and behavioral verification (signal log, exit codes 130/143, regressions)
 
 ### Phase 3: Tests and Validation
 **Goal**: The `rtx` binary is verified correct across all edge cases by automated unit tests and manual validation
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Process Foundation | 2/2 | Complete   | 2026-02-28 |
-| 2. Signal Forwarding | 1/2 | In progress | - |
+| 2. Signal Forwarding | 2/2 | Complete    | 2026-02-28 |
 | 3. Tests and Validation | 0/TBD | Not started | - |
