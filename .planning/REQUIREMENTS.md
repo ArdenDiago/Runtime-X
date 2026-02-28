@@ -14,16 +14,16 @@ Requirements for v0 release. Each maps to roadmap phases.
 
 ### Process Execution
 
-- [ ] **PROC-01**: Child process is spawned via `cmd.Start()` (not `cmd.Run()`) to allow concurrent signal handling
-- [ ] **PROC-02**: Child process stdout streams to parent stdout in real-time (direct fd assignment, no buffering)
-- [ ] **PROC-03**: Child process stderr streams to parent stderr in real-time (direct fd assignment, no buffering)
-- [ ] **PROC-04**: Child process is always reaped via `cmd.Wait()` on every code path — no zombie processes
-- [ ] **PROC-05**: Child process runs in its own process group (`Setpgid: true`) for clean signal interposition
+- [x] **PROC-01**: Child process is spawned via `cmd.Start()` (not `cmd.Run()`) to allow concurrent signal handling
+- [x] **PROC-02**: Child process stdout streams to parent stdout in real-time (direct fd assignment, no buffering)
+- [x] **PROC-03**: Child process stderr streams to parent stderr in real-time (direct fd assignment, no buffering)
+- [x] **PROC-04**: Child process is always reaped via `cmd.Wait()` on every code path — no zombie processes
+- [x] **PROC-05**: Child process runs in its own process group (`Setpgid: true`) for clean signal interposition
 
 ### Exit Codes
 
-- [ ] **EXIT-01**: Parent captures child's exact exit code via `ExitError.ExitCode()`
-- [ ] **EXIT-02**: Parent exits with child's exact exit code via `os.Exit(code)`
+- [x] **EXIT-01**: Parent captures child's exact exit code via `ExitError.ExitCode()`
+- [x] **EXIT-02**: Parent exits with child's exact exit code via `os.Exit(code)`
 - [ ] **EXIT-03**: Signal-killed child produces correct POSIX exit code (128 + signal number)
 
 ### Signal Handling
@@ -35,15 +35,15 @@ Requirements for v0 release. Each maps to roadmap phases.
 
 ### Error Handling
 
-- [ ] **ERR-01**: "Command not found" produces clear error message and exits with code 127
-- [ ] **ERR-02**: Child that crashes immediately has its exit code propagated as-is
+- [x] **ERR-01**: "Command not found" produces clear error message and exits with code 127
+- [x] **ERR-02**: Child that crashes immediately has its exit code propagated as-is
 - [ ] **ERR-03**: Signal forwarding to already-dead process is handled gracefully (swallow `os.ErrProcessDone`)
 
 ### Logging
 
-- [ ] **LOG-01**: Minimal logging to stderr: `[rtx] spawned PID %d` on start
+- [x] **LOG-01**: Minimal logging to stderr: `[rtx] spawned PID %d` on start
 - [ ] **LOG-02**: Minimal logging to stderr: `[rtx] received signal %s` on signal
-- [ ] **LOG-03**: Minimal logging to stderr: `[rtx] exited with code %d` on exit
+- [x] **LOG-03**: Minimal logging to stderr: `[rtx] exited with code %d` on exit
 
 ### Testing
 
@@ -99,17 +99,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | CLI-01 | Phase 1 | Pending |
 | CLI-02 | Phase 1 | Pending |
-| PROC-01 | Phase 1 | Pending |
-| PROC-02 | Phase 1 | Pending |
-| PROC-03 | Phase 1 | Pending |
-| PROC-04 | Phase 1 | Pending |
-| PROC-05 | Phase 1 | Pending |
-| EXIT-01 | Phase 1 | Pending |
-| EXIT-02 | Phase 1 | Pending |
-| ERR-01 | Phase 1 | Pending |
-| ERR-02 | Phase 1 | Pending |
-| LOG-01 | Phase 1 | Pending |
-| LOG-03 | Phase 1 | Pending |
+| PROC-01 | Phase 1 | Complete |
+| PROC-02 | Phase 1 | Complete |
+| PROC-03 | Phase 1 | Complete |
+| PROC-04 | Phase 1 | Complete |
+| PROC-05 | Phase 1 | Complete |
+| EXIT-01 | Phase 1 | Complete |
+| EXIT-02 | Phase 1 | Complete |
+| ERR-01 | Phase 1 | Complete |
+| ERR-02 | Phase 1 | Complete |
+| LOG-01 | Phase 1 | Complete |
+| LOG-03 | Phase 1 | Complete |
 | SIG-01 | Phase 2 | Pending |
 | SIG-02 | Phase 2 | Pending |
 | SIG-03 | Phase 2 | Pending |
