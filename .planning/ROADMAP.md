@@ -43,7 +43,11 @@ Plans:
   2. User sends SIGTERM to the `rtx` process and the child terminates cleanly with `rtx` exiting using the child's exit code
   3. User presses Ctrl+C during `rtx run sleep 100` and `rtx` exits with code 130 (128 + SIGINT signal number)
   4. User sends a signal to an already-dead child process and `rtx` handles it gracefully without crashing
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Signal interception, forwarding, and POSIX 128+N exit code emulation in runner.go
+- [ ] 02-02-PLAN.md — Binary rebuild and behavioral verification (signal log, exit codes 130/143, regressions)
 
 ### Phase 3: Tests and Validation
 **Goal**: The `rtx` binary is verified correct across all edge cases by automated unit tests and manual validation
@@ -63,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Process Foundation | 2/2 | Complete   | 2026-02-28 |
-| 2. Signal Forwarding | 0/TBD | Not started | - |
+| 2. Signal Forwarding | 0/2 | Not started | - |
 | 3. Tests and Validation | 0/TBD | Not started | - |
