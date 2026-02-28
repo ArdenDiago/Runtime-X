@@ -57,7 +57,11 @@ Plans:
   1. Running `go test ./internal/process/...` passes with tests covering exit code 1, exit code 42, zombie prevention, signal delivery, and command-not-found (exit 127)
   2. Manual run of `rtx run yes` confirms output appears line-by-line with no buffering delay visible to the user
   3. All test cases in the "Looks Done But Isn't" checklist from PITFALLS.md pass without manual intervention
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Unit tests for exit codes, zombie prevention, and signal delivery (runner_test.go)
+- [ ] 03-02-PLAN.md — Binary rebuild, full test suite run, and manual real-time streaming validation (TEST-06)
 
 ## Progress
 
@@ -68,4 +72,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Process Foundation | 2/2 | Complete   | 2026-02-28 |
 | 2. Signal Forwarding | 2/2 | Complete    | 2026-02-28 |
-| 3. Tests and Validation | 0/TBD | Not started | - |
+| 3. Tests and Validation | 0/2 | Not started | - |
