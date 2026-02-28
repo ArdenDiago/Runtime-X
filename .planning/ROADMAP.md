@@ -60,7 +60,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Unit tests for exit codes, zombie prevention, and signal delivery (runner_test.go)
+- [x] 03-01-PLAN.md — Unit tests for exit codes, zombie prevention, and signal delivery (runner_test.go)
 - [ ] 03-02-PLAN.md — Binary rebuild, full test suite run, and manual real-time streaming validation (TEST-06)
 
 ## Progress
@@ -72,4 +72,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Process Foundation | 2/2 | Complete   | 2026-02-28 |
 | 2. Signal Forwarding | 2/2 | Complete    | 2026-02-28 |
-| 3. Tests and Validation | 0/2 | Not started | - |
+| 3. Tests and Validation | 1/2 | In Progress | - |

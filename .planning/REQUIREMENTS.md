@@ -47,11 +47,11 @@ Requirements for v0 release. Each maps to roadmap phases.
 
 ### Testing
 
-- [ ] **TEST-01**: Unit test: `rtx run false` returns exit code 1
-- [ ] **TEST-02**: Unit test: `rtx run sh -c 'exit 42'` returns exit code 42
-- [ ] **TEST-03**: Unit test: process spawning does not leave zombie processes
-- [ ] **TEST-04**: Unit test: signal forwarding delivers signal to child
-- [ ] **TEST-05**: Unit test: "command not found" returns exit code 127
+- [x] **TEST-01**: Unit test: `rtx run false` returns exit code 1
+- [x] **TEST-02**: Unit test: `rtx run sh -c 'exit 42'` returns exit code 42
+- [x] **TEST-03**: Unit test: process spawning does not leave zombie processes
+- [x] **TEST-04**: Unit test: signal forwarding delivers signal to child
+- [x] **TEST-05**: Unit test: "command not found" returns exit code 127
 - [ ] **TEST-06**: Manual validation: `rtx run yes` outputs line-by-line (real-time, not buffered)
 
 ## v2 Requirements
@@ -117,11 +117,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXIT-03 | Phase 2 | Complete |
 | ERR-03 | Phase 2 | Complete |
 | LOG-02 | Phase 2 | Complete |
-| TEST-01 | Phase 3 | Pending |
-| TEST-02 | Phase 3 | Pending |
-| TEST-03 | Phase 3 | Pending |
-| TEST-04 | Phase 3 | Pending |
-| TEST-05 | Phase 3 | Pending |
+| TEST-01 | Phase 3 | Complete |
+| TEST-02 | Phase 3 | Complete |
+| TEST-03 | Phase 3 | Complete |
+| TEST-04 | Phase 3 | Complete |
+| TEST-05 | Phase 3 | Complete |
 | TEST-06 | Phase 3 | Pending |
 
 **Coverage:**
@@ -131,4 +131,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after 02-02-PLAN.md — Phase 2 complete; all Phase 2 requirements verified end-to-end via human-approved behavioral verification (SIG-01, SIG-02, SIG-03, SIG-04, EXIT-03, ERR-03, LOG-02)*
+*Last updated: 2026-02-28 after 03-01-PLAN.md — Phase 3 plan 01 complete; TEST-01 through TEST-05 verified via go test -race passing runner_test.go (exit codes 1/42/127, zombie prevention, SIGTERM forwarding)*

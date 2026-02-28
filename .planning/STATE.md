@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** Phase 3 — Scheduler Foundation
+**Current focus:** Phase 3 — Tests and Validation
 
 ## Current Position
 
-Phase: 2 of 3 (Signal Forwarding) — COMPLETE
-Plan: 2 of 2 in current phase — COMPLETE
-Status: Phase 2 complete — all signal forwarding behavior verified; ready for Phase 3
-Last activity: 2026-02-28 — Plan 02-02 complete: end-to-end behavioral verification of signal forwarding (all 7 checks passed, human-approved)
+Phase: 3 of 3 (Tests and Validation) — IN PROGRESS
+Plan: 1 of 1 in current phase — COMPLETE
+Status: Phase 3 plan 01 complete — all 5 automated tests passing (TEST-01 through TEST-05); go test -race clean
+Last activity: 2026-02-28 — Plan 03-01 complete: runner_test.go created with exit code, zombie prevention, and signal delivery tests
 
-Progress: [█████░░░░░] 67% (4/6 plans across 3 phases)
+Progress: [███████░░░] 83% (5/6 plans across 3 phases)
 
 ## Performance Metrics
 
@@ -29,10 +29,11 @@ Progress: [█████░░░░░] 67% (4/6 plans across 3 phases)
 |-------|-------|-------|----------|
 | 01-process-foundation | 2/2 | 15 min | 7.5 min |
 | 02-signal-forwarding | 2/2 | 8 min | 4 min |
+| 03-tests-and-validation | 1/1 | 6 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min), 01-02 (10 min), 02-01 (3 min), 02-02 (5 min)
-- Trend: consistent (verification plans faster than implementation plans)
+- Last 5 plans: 01-01 (5 min), 01-02 (10 min), 02-01 (3 min), 02-02 (5 min), 03-01 (6 min)
+- Trend: consistent (implementation plans typically 5-7 min)
 
 *Updated after each plan completion*
 
@@ -59,6 +60,10 @@ Recent decisions affecting current work:
 - [Phase 02-signal-forwarding 02-01]: os.ErrProcessDone swallowed silently — benign natural-exit race, logging would be misleading noise
 - [Phase 02-signal-forwarding 02-01]: resolveExitCode accepts *os.ProcessState for 128+N via WaitStatus.Signaled()
 - [Phase 02-signal-forwarding 02-02]: Phase 2 behavioral verification complete — all 7 checks passed (SIGINT 130, SIGTERM 143, natural exit 42, no zombies, command-not-found 127, signal log, interactive Ctrl+C); human-approved
+- [Phase 03-tests-and-validation 03-01]: TestHelperProcess guard uses return (not t.Skip()) — avoids SKIP noise in normal test runs
+- [Phase 03-tests-and-validation 03-01]: Zombie test uses re-exec helper with cmd.Stderr=&buf to capture spawned PID log; direct Run() call writes to os.Stderr (uncapturable)
+- [Phase 03-tests-and-validation 03-01]: Signal test sends SIGTERM to helper subprocess; process.Run() inside helper forwards to sleep grandchild; exit code 143 propagates back
+- [Phase 03-tests-and-validation 03-01]: go vet scoped to ./internal/process/... — pre-existing api package build failures out of scope
 
 ### Pending Todos
 
@@ -72,6 +77,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 02-02-PLAN.md — Phase 2 complete; all signal forwarding behavior verified end-to-end (human-approved)
+Stopped at: Completed 03-01-PLAN.md — Phase 3 plan 01 complete; all 5 automated unit tests passing with race detector clean
 Resume file: None
-Next: Phase 3 — Scheduler Foundation (03-01-PLAN.md)
+Next: Phase 3 complete — all plans done
