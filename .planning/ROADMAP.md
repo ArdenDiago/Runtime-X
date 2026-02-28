@@ -46,7 +46,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Signal interception, forwarding, and POSIX 128+N exit code emulation in runner.go
+- [x] 02-01-PLAN.md — Signal interception, forwarding, and POSIX 128+N exit code emulation in runner.go
 - [ ] 02-02-PLAN.md — Binary rebuild and behavioral verification (signal log, exit codes 130/143, regressions)
 
 ### Phase 3: Tests and Validation
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Process Foundation | 2/2 | Complete   | 2026-02-28 |
-| 2. Signal Forwarding | 0/2 | Not started | - |
+| 2. Signal Forwarding | 1/2 | In progress | - |
 | 3. Tests and Validation | 0/TBD | Not started | - |

@@ -24,25 +24,25 @@ Requirements for v0 release. Each maps to roadmap phases.
 
 - [x] **EXIT-01**: Parent captures child's exact exit code via `ExitError.ExitCode()`
 - [x] **EXIT-02**: Parent exits with child's exact exit code via `os.Exit(code)`
-- [ ] **EXIT-03**: Signal-killed child produces correct POSIX exit code (128 + signal number)
+- [x] **EXIT-03**: Signal-killed child produces correct POSIX exit code (128 + signal number)
 
 ### Signal Handling
 
-- [ ] **SIG-01**: Parent intercepts SIGINT and forwards it to child process
-- [ ] **SIG-02**: Parent intercepts SIGTERM and forwards it to child process
-- [ ] **SIG-03**: Graceful shutdown: forward signal → wait for child to finish → exit with child's code
-- [ ] **SIG-04**: Signal channel is buffered (capacity 1) to prevent dropped signals
+- [x] **SIG-01**: Parent intercepts SIGINT and forwards it to child process
+- [x] **SIG-02**: Parent intercepts SIGTERM and forwards it to child process
+- [x] **SIG-03**: Graceful shutdown: forward signal → wait for child to finish → exit with child's code
+- [x] **SIG-04**: Signal channel is buffered (capacity 1) to prevent dropped signals
 
 ### Error Handling
 
 - [x] **ERR-01**: "Command not found" produces clear error message and exits with code 127
 - [x] **ERR-02**: Child that crashes immediately has its exit code propagated as-is
-- [ ] **ERR-03**: Signal forwarding to already-dead process is handled gracefully (swallow `os.ErrProcessDone`)
+- [x] **ERR-03**: Signal forwarding to already-dead process is handled gracefully (swallow `os.ErrProcessDone`)
 
 ### Logging
 
 - [x] **LOG-01**: Minimal logging to stderr: `[rtx] spawned PID %d` on start
-- [ ] **LOG-02**: Minimal logging to stderr: `[rtx] received signal %s` on signal
+- [x] **LOG-02**: Minimal logging to stderr: `[rtx] received signal %s` on signal
 - [x] **LOG-03**: Minimal logging to stderr: `[rtx] exited with code %d` on exit
 
 ### Testing
@@ -110,13 +110,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ERR-02 | Phase 1 | Complete |
 | LOG-01 | Phase 1 | Complete |
 | LOG-03 | Phase 1 | Complete |
-| SIG-01 | Phase 2 | Pending |
-| SIG-02 | Phase 2 | Pending |
-| SIG-03 | Phase 2 | Pending |
-| SIG-04 | Phase 2 | Pending |
-| EXIT-03 | Phase 2 | Pending |
-| ERR-03 | Phase 2 | Pending |
-| LOG-02 | Phase 2 | Pending |
+| SIG-01 | Phase 2 | Complete |
+| SIG-02 | Phase 2 | Complete |
+| SIG-03 | Phase 2 | Complete |
+| SIG-04 | Phase 2 | Complete |
+| EXIT-03 | Phase 2 | Complete |
+| ERR-03 | Phase 2 | Complete |
+| LOG-02 | Phase 2 | Complete |
 | TEST-01 | Phase 3 | Pending |
 | TEST-02 | Phase 3 | Pending |
 | TEST-03 | Phase 3 | Pending |
@@ -131,4 +131,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after roadmap creation — traceability populated*
+*Last updated: 2026-02-28 after 02-01-PLAN.md — Phase 2 signal forwarding requirements complete (SIG-01, SIG-02, SIG-03, SIG-04, EXIT-03, ERR-03, LOG-02)*

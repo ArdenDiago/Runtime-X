@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** Phase 1 — Process Foundation
+**Current focus:** Phase 2 — Signal Forwarding
 
 ## Current Position
 
-Phase: 1 of 3 (Process Foundation)
-Plan: 2 of 2 in current phase — COMPLETE
-Status: Phase 1 complete, ready for Phase 2
-Last activity: 2026-02-28 — Plan 01-02 complete: CLI entry point + bin/rtx binary, all Phase 1 verification passed
+Phase: 2 of 3 (Signal Forwarding)
+Plan: 1 of 2 in current phase — COMPLETE
+Status: Phase 2 Plan 1 complete, ready for Phase 2 Plan 2
+Last activity: 2026-02-28 — Plan 02-01 complete: SIGINT/SIGTERM forwarding + POSIX 128+N exit codes
 
-Progress: [██░░░░░░░░] 33% (2/6 plans across 3 phases)
+Progress: [███░░░░░░░] 50% (3/6 plans across 3 phases)
 
 ## Performance Metrics
 
@@ -28,10 +28,11 @@ Progress: [██░░░░░░░░] 33% (2/6 plans across 3 phases)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-process-foundation | 2/2 | 15 min | 7.5 min |
+| 02-signal-forwarding | 1/2 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min), 01-02 (10 min)
-- Trend: establishing baseline
+- Last 5 plans: 01-01 (5 min), 01-02 (10 min), 02-01 (3 min)
+- Trend: accelerating (familiar patterns, minimal new surface area)
 
 *Updated after each plan completion*
 
@@ -52,6 +53,11 @@ Recent decisions affecting current work:
 - [Phase 01-process-foundation 01-02]: os.Exit only in main(), never inside run() — EXIT-02 pattern ensures deferred cleanup always executes
 - [Phase 01-process-foundation 01-02]: stdlib flag only (no cobra/urfave) — zero external dependencies, matches research constraints
 - [Phase 01-process-foundation 01-02]: --verbose/-v flag defined but unwired — intentional stub for Phase 2 debug output
+- [Phase 02-signal-forwarding 02-01]: signal.Notify called after cmd.Start() — no child to forward to before process exists
+- [Phase 02-signal-forwarding 02-01]: cmd.Process.Signal(sig) targets child PID only (not process group) — correct for single-process runner with Setpgid:true
+- [Phase 02-signal-forwarding 02-01]: waitErr = <-doneCh blocks in signal case after forward — zombie prevention + correct exit code from populated cmd.ProcessState
+- [Phase 02-signal-forwarding 02-01]: os.ErrProcessDone swallowed silently — benign natural-exit race, logging would be misleading noise
+- [Phase 02-signal-forwarding 02-01]: resolveExitCode accepts *os.ProcessState for 128+N via WaitStatus.Signaled()
 
 ### Pending Todos
 
@@ -59,11 +65,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 2]: Process group decision must be made before coding: `Setpgid: true` (recommended) vs. default group. STACK.md recommends Setpgid for observable behavior; revisit if testing reveals issues.
+- [Phase 2 resolved]: Process group decision: confirmed Setpgid:true + PID-targeted forwarding via cmd.Process.Signal(). Works correctly.
+- [Out of scope]: internal/api/handlers.go has pre-existing build failures (h.Scheduler undefined, undefined: models). Logged in .planning/phases/02-signal-forwarding/deferred-items.md. Does not affect process runner or rtx binary.
 
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 01-02-PLAN.md — CLI entry point + bin/rtx binary; Phase 1 fully complete
+Stopped at: Completed 02-01-PLAN.md — SIGINT/SIGTERM forwarding + POSIX 128+N exit codes; all 7 requirements satisfied
 Resume file: None
-Next: Phase 2 — Signal Forwarding (SIG-01, SIG-02, SIG-03, SIG-04, EXIT-03, ERR-03, LOG-02)
+Next: Phase 2 Plan 2 — 02-02-PLAN.md (check plan for details)
