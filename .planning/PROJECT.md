@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Runtime X is a user-space process runner written in Go. The `rtx` CLI binary executes arbitrary commands as child processes with correct signal forwarding, exact exit code propagation, real-time I/O streaming, and zombie prevention. v1.0 proves deterministic process lifecycle management on Linux.
+Runtime X is a full-stack process manager written in Go with a React frontend. The `rtx` CLI spawns and manages multiple processes with dependency-aware start ordering, restart policies with exponential backoff, and real-time log streaming. A Go REST API and React UI provide browser-based process management — create, start/stop, monitor, and view logs. Built on the v1.0 single-process runner foundation.
 
 ## Core Value
 
@@ -29,42 +29,58 @@ Correct, deterministic process lifecycle management — no zombies, no orphans, 
 
 ### Active
 
-(None — next milestone requirements TBD)
+- [ ] Codebase refactor: remove old Docker/API code, clean project structure
+- [ ] Internal scheduler managing multiple processes with lifecycle tracking
+- [ ] Dependency-aware process start ordering (Process B waits for A)
+- [ ] Restart policies with exponential backoff (configurable per process)
+- [ ] Go REST API for process CRUD, start/stop, status, log retrieval
+- [ ] React frontend: full management UI (create/edit/start/stop/monitor/logs)
+- [ ] Log viewer with polling-based refresh
 
 ### Out of Scope
 
-- Config files / YAML parsing — v0 philosophy: earn trust through correctness
-- Daemon mode / background mode — not needed for process correctness proof
-- Restart policies — v1+ concern, requires understanding real failure patterns
-- Multiple process support — single process focus for v0 correctness proof
-- State persistence — in-memory PID only during the run
-- Lifecycle FSM — keep it simple, no state machine needed
-- Isolation / Networking / HTTP API — Docker system handles this
-- Metrics / Observability frameworks — minimal logging only
+- Config files / YAML parsing — process definitions come from API, not files
+- Daemon mode / background mode — API server handles lifecycle
+- State persistence to disk — in-memory process state only
 - Containers / Plugins — future versions
 - Signal rewriting / remapping — forward as-is
-- Structured/JSON logging — plain stderr sufficient
+- Structured/JSON logging for process output — plain stderr sufficient
 - Shell wrapping (sh -c) — direct exec.Command for correctness
 - StdoutPipe/StderrPipe goroutines — race condition risk, use direct fd assignment
+- WebSocket/SSE log streaming — polling is sufficient for v1.1
+- OAuth / user authentication — single-user for now
+- Process metrics / observability dashboards — basic status only
+
+## Current Milestone: v1.1 Full-Stack Process Manager
+
+**Goal:** Transform rtx from a single-process CLI runner into a multi-process manager with a web UI for full browser-based process management.
+
+**Target features:**
+- Codebase cleanup (remove legacy Docker orchestration code)
+- Multi-process scheduler with dependency ordering
+- Restart policies with exponential backoff
+- Go REST API backend
+- React frontend for full process management
+- Polling-based log viewer
 
 ## Context
 
-- Brownfield project: existing Docker orchestration system in `cmd/`, `internal/`
+- v1.0 shipped 2026-02-28: single-process runner with signal forwarding, exit codes, zombie prevention
 - `rtx` binary entry point at `cmd/rtx/main.go`
 - Process execution logic in `internal/process/runner.go` (97 lines)
 - Unit tests in `internal/process/runner_test.go` (171 lines)
-- Go stdlib only (os/exec, os/signal, syscall) — zero external dependencies
+- Legacy Docker orchestration code in `cmd/api/`, `internal/api/`, `internal/worker/` — to be removed
+- Go stdlib only for core runner — API and frontend will add dependencies (net/http router, React)
 - Linux first-class, cross-platform compatible
-- 1,976 Go LOC total
-- v1.0 shipped 2026-02-28
+- 1,976 Go LOC total (pre-refactor)
 
 ## Constraints
 
 - **Language**: Go (latest stable) — project is already Go
-- **Dependencies**: Standard library only for rtx — no external frameworks
+- **Dependencies**: Stdlib for core runner; minimal dependencies for API (standard net/http or chi); React for frontend
 - **Platform**: Linux first-class, cross-platform compatible
-- **Scope**: Single process execution only — no multi-process
-- **Logging**: Minimal (PID, signals, exit code) — no structured/JSON logging
+- **Scope**: Multi-process management with web UI
+- **Logging**: Minimal process logging (PID, signals, exit code); API uses standard HTTP logging
 
 ## Key Decisions
 
@@ -84,4 +100,4 @@ Correct, deterministic process lifecycle management — no zombies, no orphans, 
 | Re-exec helper pattern for signal/zombie tests | Canonical Go stdlib pattern, no mocking needed | ✓ Good |
 
 ---
-*Last updated: 2026-02-28 after v1.0 milestone*
+*Last updated: 2026-02-28 after v1.1 milestone start*
