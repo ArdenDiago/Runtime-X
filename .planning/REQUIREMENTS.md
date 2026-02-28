@@ -9,8 +9,8 @@ Requirements for v0 release. Each maps to roadmap phases.
 
 ### CLI
 
-- [ ] **CLI-01**: User can run `rtx run <command> [args...]` to spawn a child process
-- [ ] **CLI-02**: User sees PID displayed immediately after process spawns
+- [x] **CLI-01**: User can run `rtx run <command> [args...]` to spawn a child process
+- [x] **CLI-02**: User sees PID displayed immediately after process spawns
 
 ### Process Execution
 
@@ -97,8 +97,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLI-01 | Phase 1 | Pending |
-| CLI-02 | Phase 1 | Pending |
+| CLI-01 | Phase 1 | Complete |
+| CLI-02 | Phase 1 | Complete |
 | PROC-01 | Phase 1 | Complete |
 | PROC-02 | Phase 1 | Complete |
 | PROC-03 | Phase 1 | Complete |

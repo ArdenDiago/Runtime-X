@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 ## Current Position
 
 Phase: 1 of 3 (Process Foundation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-28 — Plan 01-01 complete: process runner core package
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 1 complete, ready for Phase 2
+Last activity: 2026-02-28 — Plan 01-02 complete: CLI entry point + bin/rtx binary, all Phase 1 verification passed
 
-Progress: [█░░░░░░░░░] 17% (1/6 plans across 3 phases)
+Progress: [██░░░░░░░░] 33% (2/6 plans across 3 phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 5 min
-- Total execution time: 0.08 hours
+- Total plans completed: 2
+- Average duration: 7.5 min
+- Total execution time: 0.25 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-process-foundation | 1/2 | 5 min | 5 min |
+| 01-process-foundation | 2/2 | 15 min | 7.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min)
+- Last 5 plans: 01-01 (5 min), 01-02 (10 min)
 - Trend: establishing baseline
 
 *Updated after each plan completion*
@@ -49,6 +49,9 @@ Recent decisions affecting current work:
 - [Phase 01-process-foundation]: cmd.Start()+doneCh goroutine pattern used for zombie-safe wait; enables Phase 2 signal forwarding without restructuring
 - [Phase 01-process-foundation]: Direct fd inheritance (cmd.Stdout=os.Stdout) chosen over StdoutPipe() — eliminates pipe goroutine race and buffering
 - [Phase 01-process-foundation]: Setpgid:true applied from Phase 1 so Phase 2 signal forwarding only needs to add select case, not restructure
+- [Phase 01-process-foundation 01-02]: os.Exit only in main(), never inside run() — EXIT-02 pattern ensures deferred cleanup always executes
+- [Phase 01-process-foundation 01-02]: stdlib flag only (no cobra/urfave) — zero external dependencies, matches research constraints
+- [Phase 01-process-foundation 01-02]: --verbose/-v flag defined but unwired — intentional stub for Phase 2 debug output
 
 ### Pending Todos
 
@@ -61,5 +64,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 01-01-PLAN.md — process runner core package (internal/process/runner.go)
+Stopped at: Completed 01-02-PLAN.md — CLI entry point + bin/rtx binary; Phase 1 fully complete
 Resume file: None
+Next: Phase 2 — Signal Forwarding (SIG-01, SIG-02, SIG-03, SIG-04, EXIT-03, ERR-03, LOG-02)
