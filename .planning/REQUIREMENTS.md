@@ -109,47 +109,47 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLN-01 | TBD | Pending |
-| CLN-02 | TBD | Pending |
-| CLN-03 | TBD | Pending |
-| SCH-01 | TBD | Pending |
-| SCH-02 | TBD | Pending |
-| SCH-03 | TBD | Pending |
-| SCH-04 | TBD | Pending |
-| SCH-05 | TBD | Pending |
-| SCH-06 | TBD | Pending |
-| DEP-01 | TBD | Pending |
-| DEP-02 | TBD | Pending |
-| DEP-03 | TBD | Pending |
-| RST-01 | TBD | Pending |
-| RST-02 | TBD | Pending |
-| RST-03 | TBD | Pending |
-| RST-04 | TBD | Pending |
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| API-03 | TBD | Pending |
-| API-04 | TBD | Pending |
-| API-05 | TBD | Pending |
-| API-06 | TBD | Pending |
-| API-07 | TBD | Pending |
-| API-08 | TBD | Pending |
-| API-09 | TBD | Pending |
-| CMD-01 | TBD | Pending |
-| CMD-02 | TBD | Pending |
-| CMD-03 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| UI-05 | TBD | Pending |
-| UI-06 | TBD | Pending |
-| UI-07 | TBD | Pending |
+| CLN-01 | Phase 4 | Pending |
+| CLN-02 | Phase 4 | Pending |
+| CLN-03 | Phase 4 | Pending |
+| SCH-01 | Phase 5 | Pending |
+| SCH-05 | Phase 5 | Pending |
+| SCH-06 | Phase 5 | Pending |
+| SCH-02 | Phase 6 | Pending |
+| SCH-03 | Phase 6 | Pending |
+| SCH-04 | Phase 6 | Pending |
+| DEP-01 | Phase 7 | Pending |
+| DEP-02 | Phase 7 | Pending |
+| DEP-03 | Phase 7 | Pending |
+| RST-01 | Phase 8 | Pending |
+| RST-02 | Phase 8 | Pending |
+| RST-03 | Phase 8 | Pending |
+| RST-04 | Phase 8 | Pending |
+| API-01 | Phase 9 | Pending |
+| API-02 | Phase 9 | Pending |
+| API-03 | Phase 9 | Pending |
+| API-04 | Phase 9 | Pending |
+| API-05 | Phase 9 | Pending |
+| API-06 | Phase 9 | Pending |
+| API-07 | Phase 9 | Pending |
+| API-08 | Phase 9 | Pending |
+| API-09 | Phase 9 | Pending |
+| CMD-01 | Phase 10 | Pending |
+| CMD-02 | Phase 10 | Pending |
+| CMD-03 | Phase 10 | Pending |
+| UI-01 | Phase 11 | Pending |
+| UI-02 | Phase 11 | Pending |
+| UI-03 | Phase 11 | Pending |
+| UI-04 | Phase 11 | Pending |
+| UI-05 | Phase 11 | Pending |
+| UI-06 | Phase 11 | Pending |
+| UI-07 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 35 total
-- Mapped to phases: 0
-- Unmapped: 35
+- Mapped to phases: 35
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-01*
-*Last updated: 2026-03-01 after v1.1 milestone definition*
+*Last updated: 2026-03-01 after v1.1 roadmap creation*
