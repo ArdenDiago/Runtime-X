@@ -9,9 +9,9 @@ Requirements for v1.1 Full-Stack Process Manager. Each maps to roadmap phases.
 
 ### Codebase Cleanup
 
-- [ ] **CLN-01**: Legacy Docker orchestration code (cmd/api/, internal/api/, internal/worker/) is removed
-- [ ] **CLN-02**: Project directory structure is reorganized for scheduler + API + frontend architecture
-- [ ] **CLN-03**: `go build ./...` succeeds with no build errors after cleanup
+- [x] **CLN-01**: Legacy Docker orchestration code (cmd/api/, internal/api/, internal/worker/) is removed
+- [x] **CLN-02**: Project directory structure is reorganized for scheduler + API + frontend architecture
+- [x] **CLN-03**: `go build ./...` succeeds with no build errors after cleanup
 
 ### Scheduler Core
 
@@ -109,9 +109,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLN-01 | Phase 4 | Pending |
-| CLN-02 | Phase 4 | Pending |
-| CLN-03 | Phase 4 | Pending |
+| CLN-01 | Phase 4 | Complete |
+| CLN-02 | Phase 4 | Complete |
+| CLN-03 | Phase 4 | Complete |
 | SCH-01 | Phase 5 | Pending |
 | SCH-05 | Phase 5 | Pending |
 | SCH-06 | Phase 5 | Pending |
@@ -152,4 +152,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-01*
-*Last updated: 2026-03-01 after v1.1 roadmap creation*
+*Last updated: 2026-03-01 after Phase 4 completion (CLN-01, CLN-02, CLN-03 complete)*

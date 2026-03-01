@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 4 of 11 (Codebase Cleanup)
-Plan: — of — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-01 — v1.1 roadmap created (8 phases, 35 requirements mapped)
+Plan: 1 of 1 complete
+Status: Phase 4 complete — ready for Phase 5
+Last activity: 2026-03-01 — Phase 4 plan 01 executed (codebase cleanup complete)
 
-Progress: [░░░░░░░░░░] 0% (v1.1) — v1.0 complete
+Progress: [█░░░░░░░░░] 12% (v1.1) — v1.0 complete, Phase 4 done
 
 ## Performance Metrics
 
@@ -49,19 +49,25 @@ Recent decisions relevant to v1.1:
 - [v1.1 arch]: logBuffer needs its own sync.Mutex independent of scheduler RWMutex (log writes come from cmd.Start() goroutines)
 - [v1.1 arch]: Release scheduler write lock before cmd.Start() to prevent deadlock
 
+Phase 4 decisions:
+- [04 cleanup]: Keep module path as runtimex — renaming adds friction with no benefit
+- [04 cleanup]: Removed commented-out uuid require from go.mod — go mod tidy doesn't strip comments
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-- [Phase 4 prerequisite]: internal/api/handlers.go has a pre-existing build failure (references undefined type from deleted models package). Phase 4 exists specifically to fix this — go build ./... is currently broken.
 - [Phase 9/10 gap]: Production static file serving strategy (http.FileServer vs go:embed) needs a decision during Phase 10 planning. Recommendation: http.FileServer(http.Dir("web/dist")) for v1.1 simplicity.
 - [Phase 11 gap]: Restart policy form UX (duration input format — seconds as integer vs "5s" string) must match JSON API body format. Decide during Phase 11 planning.
+
+Resolved:
+- [RESOLVED Phase 4]: internal/api/handlers.go build failure — entire legacy codebase removed in Phase 4. go build ./... now exits 0.
 
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Roadmap created for v1.1 (Phases 4-11)
+Stopped at: Completed 04-01-PLAN.md (codebase cleanup — legacy Docker removal complete)
 Resume file: None
-Next: `/gsd:plan-phase 4` — plan Phase 4: Codebase Cleanup
+Next: `/gsd:plan-phase 5` — plan Phase 5: Scheduler Core
