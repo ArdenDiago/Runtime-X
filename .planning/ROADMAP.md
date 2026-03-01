@@ -40,7 +40,7 @@
   2. `go test ./...` exits 0 — existing v1.0 runner tests still pass
   3. No files remain under `cmd/api/`, `internal/api/`, or `internal/worker/`
   4. Project directory structure reflects the scheduler + API + frontend layout for v1.1
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [x] 04-01-PLAN.md — Remove legacy code, update config, verify clean build
 
@@ -134,7 +134,7 @@ Plans:
 | 1. Process Foundation | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 2. Signal Forwarding | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 3. Tests and Validation | v1.0 | 2/2 | Complete | 2026-02-28 |
-| 4. Codebase Cleanup | v1.1 | 1/1 | Complete | 2026-03-01 |
+| 4. Codebase Cleanup | v1.1 | Complete    | 2026-03-01 | 2026-03-01 |
 | 5. Scheduler Data Structures and Log Buffer | v1.1 | 0/TBD | Not started | - |
 | 6. Scheduler Start, Stop, and Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 7. Dependency Ordering | v1.1 | 0/TBD | Not started | - |
