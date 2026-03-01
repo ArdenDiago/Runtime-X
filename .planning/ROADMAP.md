@@ -138,7 +138,7 @@ Plans:
 | 2. Signal Forwarding | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 3. Tests and Validation | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 4. Codebase Cleanup | v1.1 | Complete    | 2026-03-01 | 2026-03-01 |
-| 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete   | 2026-03-01 | - |
+| 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete    | 2026-03-01 | - |
 | 6. Scheduler Start, Stop, and Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 7. Dependency Ordering | v1.1 | 0/TBD | Not started | - |
 | 8. Restart Policies | v1.1 | 0/TBD | Not started | - |
