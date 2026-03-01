@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 4: Codebase Cleanup
+**Current focus:** v1.1 — Phase 5: Scheduler Data Structures and Log Buffer
 
 ## Current Position
 
-Phase: 4 of 11 (Codebase Cleanup)
-Plan: 1 of 1 complete
-Status: Phase 4 complete — ready for Phase 5
-Last activity: 2026-03-01 — Phase 4 plan 01 executed (codebase cleanup complete)
+Phase: 5 of 11 (Scheduler Data Structures and Log Buffer)
+Plan: 1 of 3 complete
+Status: Phase 5 plan 01 complete — log buffer implemented
+Last activity: 2026-03-01 — Phase 5 plan 01 executed (logBuffer ring buffer with TDD)
 
-Progress: [█░░░░░░░░░] 12% (v1.1) — v1.0 complete, Phase 4 done
+Progress: [██░░░░░░░░] 15% (v1.1) — v1.0 complete, Phase 4 done, Phase 5.1 done
 
 ## Performance Metrics
 
@@ -53,6 +53,11 @@ Phase 4 decisions:
 - [04 cleanup]: Keep module path as runtimex — renaming adds friction with no benefit
 - [04 cleanup]: Removed commented-out uuid require from go.mod — go mod tidy doesn't strip comments
 
+Phase 5 plan 01 decisions:
+- [05-01 arch]: sync.Mutex (not RWMutex) on logBuffer — writes and reads at similar frequency; Mutex simpler and faster at balanced ratios
+- [05-01 arch]: logBuffer has its own independent mutex separate from Scheduler's RWMutex — prevents Phase 6 deadlock where cmd.Start() goroutines call Write() while scheduler may hold write lock
+- [05-01 impl]: Default buffer size 1000 for size <= 0 — prevents divide-by-zero panic in modulo, matches ProcessDef.LogBufferSize zero-value behavior
+
 ### Pending Todos
 
 None.
@@ -68,6 +73,6 @@ Resolved:
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 04-01-PLAN.md (codebase cleanup — legacy Docker removal complete)
+Stopped at: Completed 05-01-PLAN.md (logBuffer ring buffer — mutex-safe ring buffer with Write/Lines/Len)
 Resume file: None
-Next: `/gsd:plan-phase 5` — plan Phase 5: Scheduler Core
+Next: Execute Phase 5 Plan 02 — ProcessDef, ManagedProcess, State types

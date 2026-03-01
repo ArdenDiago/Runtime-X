@@ -19,8 +19,8 @@ Requirements for v1.1 Full-Stack Process Manager. Each maps to roadmap phases.
 - [ ] **SCH-02**: User can start a registered process — scheduler spawns it and tracks its PID and status
 - [ ] **SCH-03**: User can stop a running process — scheduler sends SIGTERM and waits for exit
 - [ ] **SCH-04**: User can list all registered processes with their current status (stopped/running/restarting/failed)
-- [ ] **SCH-05**: Each process's stdout and stderr are captured in a per-process ring buffer (not direct fd to parent)
-- [ ] **SCH-06**: User can retrieve recent log lines from a process's ring buffer
+- [x] **SCH-05**: Each process's stdout and stderr are captured in a per-process ring buffer (not direct fd to parent)
+- [x] **SCH-06**: User can retrieve recent log lines from a process's ring buffer
 
 ### Dependency Ordering
 
@@ -113,8 +113,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLN-02 | Phase 4 | Complete |
 | CLN-03 | Phase 4 | Complete |
 | SCH-01 | Phase 5 | Pending |
-| SCH-05 | Phase 5 | Pending |
-| SCH-06 | Phase 5 | Pending |
+| SCH-05 | Phase 5 | Complete |
+| SCH-06 | Phase 5 | Complete |
 | SCH-02 | Phase 6 | Pending |
 | SCH-03 | Phase 6 | Pending |
 | SCH-04 | Phase 6 | Pending |
