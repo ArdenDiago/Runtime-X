@@ -21,7 +21,7 @@
 **Milestone Goal:** Transform rtx from a single-process CLI runner into a multi-process manager with a web UI for full browser-based process management.
 
 - [x] **Phase 4: Codebase Cleanup** (1/1 plans) — Remove legacy Docker/API code and restore a clean, compiling baseline — completed 2026-03-01
-- [ ] **Phase 5: Scheduler Data Structures and Log Buffer** — Define core types and mutex-safe ring buffer that all later scheduler logic depends on
+- [x] **Phase 5: Scheduler Data Structures and Log Buffer** — Define core types and mutex-safe ring buffer that all later scheduler logic depends on (completed 2026-03-01)
 - [ ] **Phase 6: Scheduler Start, Stop, and Lifecycle** — Implement the core process lifecycle methods on a race-free foundation
 - [ ] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator
 - [ ] **Phase 8: Restart Policies** — Add exponential backoff restart with cancellable goroutines as the second v1.1 differentiator
@@ -53,7 +53,7 @@ Plans:
   2. A process's log buffer captures output and evicts oldest lines when the ring is full
   3. `go test -race ./internal/scheduler/...` passes with concurrent log writes and reads — no data races detected
   4. Retrieved log lines from the ring buffer reflect the most recent output, not overwritten history
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 05-01-PLAN.md — TDD: Log buffer ring buffer (mutex-safe, evict-oldest, concurrent read/write)
 - [ ] 05-02-PLAN.md — TDD: Scheduler types and registration (ProcessDef, State FSM, Register/Remove/Get/List/Logs)
@@ -138,7 +138,7 @@ Plans:
 | 2. Signal Forwarding | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 3. Tests and Validation | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 4. Codebase Cleanup | v1.1 | Complete    | 2026-03-01 | 2026-03-01 |
-| 5. Scheduler Data Structures and Log Buffer | 1/2 | In Progress|  | - |
+| 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete   | 2026-03-01 | - |
 | 6. Scheduler Start, Stop, and Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 7. Dependency Ordering | v1.1 | 0/TBD | Not started | - |
 | 8. Restart Policies | v1.1 | 0/TBD | Not started | - |

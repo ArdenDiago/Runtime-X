@@ -15,7 +15,7 @@ Requirements for v1.1 Full-Stack Process Manager. Each maps to roadmap phases.
 
 ### Scheduler Core
 
-- [ ] **SCH-01**: User can register a process definition (name, command, args, restart policy) with the scheduler
+- [x] **SCH-01**: User can register a process definition (name, command, args, restart policy) with the scheduler
 - [ ] **SCH-02**: User can start a registered process — scheduler spawns it and tracks its PID and status
 - [ ] **SCH-03**: User can stop a running process — scheduler sends SIGTERM and waits for exit
 - [ ] **SCH-04**: User can list all registered processes with their current status (stopped/running/restarting/failed)
@@ -112,7 +112,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLN-01 | Phase 4 | Complete |
 | CLN-02 | Phase 4 | Complete |
 | CLN-03 | Phase 4 | Complete |
-| SCH-01 | Phase 5 | Pending |
+| SCH-01 | Phase 5 | Complete |
 | SCH-05 | Phase 5 | Complete |
 | SCH-06 | Phase 5 | Complete |
 | SCH-02 | Phase 6 | Pending |

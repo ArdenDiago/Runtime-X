@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 5 of 11 (Scheduler Data Structures and Log Buffer)
-Plan: 1 of 3 complete
-Status: Phase 5 plan 01 complete — log buffer implemented
-Last activity: 2026-03-01 — Phase 5 plan 01 executed (logBuffer ring buffer with TDD)
+Plan: 2 of 3 complete
+Status: Phase 5 plan 02 complete — scheduler types and registration implemented
+Last activity: 2026-03-01 — Phase 5 plan 02 executed (ProcessDef/ManagedProcess/State FSM/Scheduler with TDD)
 
-Progress: [██░░░░░░░░] 15% (v1.1) — v1.0 complete, Phase 4 done, Phase 5.1 done
+Progress: [███░░░░░░░] 20% (v1.1) — v1.0 complete, Phase 4 done, Phase 5.1 done, Phase 5.2 done
 
 ## Performance Metrics
 
@@ -58,6 +58,12 @@ Phase 5 plan 01 decisions:
 - [05-01 arch]: logBuffer has its own independent mutex separate from Scheduler's RWMutex — prevents Phase 6 deadlock where cmd.Start() goroutines call Write() while scheduler may hold write lock
 - [05-01 impl]: Default buffer size 1000 for size <= 0 — prevents divide-by-zero panic in modulo, matches ProcessDef.LogBufferSize zero-value behavior
 
+Phase 5 plan 02 decisions:
+- [05-02 arch]: transition() is unexported — Phase 6 calls it from Scheduler methods holding the write lock; same-package tests call it directly
+- [05-02 arch]: Remove() permits Idle, Stopped, and Failed states — Idle was never started; Failed may need removal before retry
+- [05-02 arch]: Scheduler.Logs() releases RLock before calling mp.logs.Lines() — prevents lock-ordering hazard with Phase 6 writer goroutines
+- [05-02 impl]: validateName regexp ^[a-z0-9][a-z0-9-]*$ — first char cannot be hyphen, prevents URL path segment confusion in Phase 9 HTTP handlers
+
 ### Pending Todos
 
 None.
@@ -73,6 +79,6 @@ Resolved:
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 05-01-PLAN.md (logBuffer ring buffer — mutex-safe ring buffer with Write/Lines/Len)
+Stopped at: Completed 05-02-PLAN.md (Scheduler types and registration — ProcessDef/ManagedProcess/State FSM with Register/Remove/Get/List/Logs)
 Resume file: None
-Next: Execute Phase 5 Plan 02 — ProcessDef, ManagedProcess, State types
+Next: Execute Phase 5 Plan 03 — remaining Phase 5 work (if any) or proceed to Phase 6 Scheduler Process Lifecycle
