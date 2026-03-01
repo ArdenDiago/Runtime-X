@@ -1,215 +1,516 @@
 # Pitfalls Research
 
-**Domain:** Go process runner CLI (os/exec, signal handling, zombie prevention, exit code propagation, real-time streaming)
-**Researched:** 2026-02-27
-**Confidence:** HIGH — primary sources are pkg.go.dev official docs, tracked Go issue tracker bugs, and verified cross-source patterns
+**Domain:** Multi-process scheduler, Go REST API, React frontend (Runtime X v1.1)
+**Researched:** 2026-03-01
+**Confidence:** HIGH — based on direct codebase analysis of existing runner.go, Go stdlib official docs, and verified patterns from process supervisor implementations
+
+> **Scope:** This document covers v1.1 additions only. v1.0 pitfalls (StdoutPipe deadlock, zombie prevention, signal channel buffer size, exit code extraction) are already solved in `internal/process/runner.go` and are not repeated here. Every pitfall below is specific to adding: multi-process scheduler, per-process log capture, Go REST API, React frontend, exponential backoff restart policies.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Calling cmd.Run() or cmd.Wait() Before Draining StdoutPipe/StderrPipe
+### Pitfall 1: Calling process.Run() From the Scheduler — Blocking the Goroutine
 
 **What goes wrong:**
-Using `cmd.StdoutPipe()` or `cmd.StderrPipe()` and then calling `cmd.Run()` (instead of `cmd.Start()`) causes a deadlock. `Run()` internally calls `Wait()`, which waits for the command to finish — but the command won't finish until the pipes are drained, and nothing drains them until after `Run()` returns. Classic circular wait.
-
-Similarly, calling `cmd.Wait()` before all goroutines reading from the pipes have finished causes a data race (detected by `-race`).
+The existing `process.Run(name, args)` in `internal/process/runner.go` is a blocking function. It holds the calling goroutine until the child exits, owns signal handling for the parent process, and returns an `int`. If the scheduler calls `process.Run()` in a goroutine per managed process, it loses all control: it cannot access `cmd.Process` to call `Signal()` for `Stop()`, cannot redirect stdout/stderr to the per-process log buffer, and cannot inspect or update process state while the child is running. Signal handling in `runner.go` also installs `signal.Notify` on the parent — running this in multiple goroutines races on the signal channel and is incorrect.
 
 **Why it happens:**
-Developers see `StdoutPipe()` as a simple "get output" call and assume `Run()` still works. The Go docs warn against this but the API doesn't prevent it.
+`process.Run()` exists and handles signals and exit codes correctly. Reusing it seems like the obvious choice for DRY reasons.
 
 **How to avoid:**
-- Use `cmd.Start()` (never `cmd.Run()`) when using `StdoutPipe()` or `StderrPipe()`
-- Start goroutines to read each pipe before calling `cmd.Wait()`
-- Call `cmd.Wait()` only after all pipe-reading goroutines have finished
-- Alternatively, skip pipes entirely: set `cmd.Stdout = os.Stdout` and `cmd.Stderr = os.Stderr` directly for pass-through streaming — no goroutines needed, no race condition possible
-
-For this project (real-time streaming with no buffering), the simplest correct approach is direct assignment:
+The scheduler must reimplement the process lifecycle directly using the patterns from `runner.go` — not the function itself. Specifically:
 ```go
-cmd.Stdout = os.Stdout
-cmd.Stderr = os.Stderr
+// In scheduler — do NOT call process.Run()
+cmd := exec.Command(def.Command, def.Args...)
+cmd.Stdout = p.logBuf          // per-process log capture
+cmd.Stderr = p.logBuf
+cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+if err := cmd.Start(); err != nil { ... }
+p.cmd = cmd
+p.pid = cmd.Process.Pid
+
+// Non-blocking: goroutine waits; Stop() signals externally
+go func() {
+    err := cmd.Wait()
+    exitCode := resolveExitCode(err, cmd.ProcessState)
+    // update state, schedule restart
+}()
+```
+`process.Run()` continues to be called only by `cmd/rtx/main.go` for the `rtx run` subcommand.
+
+**Warning signs:**
+- Scheduler has no field for `*exec.Cmd` — it has nowhere to store the handle for `Stop()`
+- `Stop()` implementation sends a signal to a PID rather than calling `cmd.Process.Signal()` directly
+- Log output from managed processes appears on the terminal instead of being captured
+
+**Phase to address:** Scheduler process start/stop implementation (Step 3 in build order)
+
+---
+
+### Pitfall 2: Direct fd Assignment (cmd.Stdout = os.Stdout) in the Multi-Process Scheduler
+
+**What goes wrong:**
+The v1.0 pattern `cmd.Stdout = os.Stdout` / `cmd.Stderr = os.Stderr` is correct for a single transparent process runner. In the multi-process scheduler, it breaks in two ways:
+
+1. **Output from all managed processes interleaves on the terminal** with no identification — there is no way to associate a log line with its source process.
+2. **The HTTP log endpoint has nothing to return** — logs that flow directly to `os.Stdout` are not captured anywhere the API can read them.
+
+Additionally, Go's `cmd.Wait()` does not spawn internal copy goroutines when `Stdout`/`Stderr` are `*os.File` — this was an advantage in v1.0. If instead an `io.Writer` (e.g., `io.MultiWriter`) is used without synchronization, `cmd.Wait()` does spawn internal copy goroutines that write to the writer concurrently from two goroutines (stdout copier and stderr copier). If the writer is not goroutine-safe, this is a data race.
+
+**Why it happens:**
+The v1.0 pattern is explicitly documented in the codebase comments as correct. Developers copy it into the scheduler without recognizing that the scheduler's requirements are different.
+
+**How to avoid:**
+Each `ManagedProcess` owns a `logBuffer` implementing `io.Writer` with its own `sync.Mutex`. Assign it to both `cmd.Stdout` and `cmd.Stderr`:
+```go
+buf := &logBuffer{cap: 1000}
+cmd.Stdout = buf
+cmd.Stderr = buf
+```
+The `logBuffer.Write()` must acquire its mutex before modifying `lines`. When both stdout and stderr point to the same writer, Go's internal copy goroutines (spawned by `cmd.Start()`) write to it concurrently — the mutex makes this safe.
+
+For local debugging, `io.MultiWriter(buf, os.Stdout)` can be used, but `os.Stdout` is itself goroutine-safe (it is an `*os.File`), so this is fine.
+
+**Warning signs:**
+- All managed process output appears in the server terminal mixed together
+- `GET /api/processes/{id}/logs` returns an empty array
+- `-race` detector reports a data race in `logBuffer.Write()`
+
+**Phase to address:** Scheduler process struct and log buffer (Step 2 in build order) — must be solved before any process start logic
+
+---
+
+### Pitfall 3: Shared logBuffer Without Per-Buffer Mutex — Data Race on Every Write
+
+**What goes wrong:**
+The `logBuf.lines` slice is written by the goroutine copying from the child process's stdout/stderr pipe, and simultaneously read by HTTP handlers serving `GET /api/processes/{id}/logs`. Without synchronization, this is a textbook data race. Go's slice header (pointer, length, capacity) is not atomically readable — a concurrent append that triggers a reallocation can cause the reader to see a partially-updated pointer. The race detector flags this immediately. In practice it causes corrupted log output or a panic.
+
+**Why it happens:**
+The log buffer is typically written by one goroutine and read by another. Developers add a lock to the `Scheduler`'s top-level `mu` for other operations but forget that the log buffer has its own separate access pattern — writes happen from the process's copy goroutine (started by `cmd.Start()`), not from the scheduler's own goroutines.
+
+**How to avoid:**
+Give `logBuffer` its own independent `sync.Mutex`. Do not share the scheduler's `mu` for log buffer access — it would force serialization of all log writes with all scheduler operations:
+```go
+type logBuffer struct {
+    mu    sync.Mutex
+    lines []string
+    cap   int
+}
+
+func (lb *logBuffer) Write(p []byte) (n int, err error) {
+    lb.mu.Lock()
+    defer lb.mu.Unlock()
+    // split p into lines, append with eviction
+    return len(p), nil
+}
+
+func (lb *logBuffer) Lines() []string {
+    lb.mu.Lock()
+    defer lb.mu.Unlock()
+    result := make([]string, len(lb.lines))
+    copy(result, lb.lines)  // return a copy — caller cannot mutate internal state
+    return result
+}
 ```
 
 **Warning signs:**
-- Process hangs indefinitely after output stops
-- `-race` detector reports data race on pipe reads
-- Output appears only after the command finishes (buffered, not real-time)
+- `-race ./...` reports a data race mentioning `logBuffer` or its `lines` field
+- Log lines appear out of order or truncated
+- Occasional panic: `runtime error: slice bounds out of range`
 
-**Phase to address:** Process execution foundation — must be settled before any other work
+**Phase to address:** Scheduler process struct and log buffer (Step 2 in build order)
 
 ---
 
-### Pitfall 2: Forgetting cmd.Wait() After cmd.Start() — Zombie Processes
+### Pitfall 4: Growing Log Slice Without Eviction — Unbounded Memory
 
 **What goes wrong:**
-If `cmd.Start()` is called but `cmd.Wait()` is never called, the child process becomes a zombie once it exits. The zombie persists in the process table for the entire lifetime of the Go process. On POSIX systems, the OS requires the parent to call `wait()` (or equivalent) to reap the child's exit status. Go's `cmd.Wait()` maps to `syscall.Wait4`.
+`logs = append(logs, newLine)` indefinitely causes memory to grow proportional to the total lifetime output of every managed process. A verbose process running `yes` or a log-heavy server can exhaust available memory. Since log persistence to disk is out of scope for v1.1, there is no alternative drain path.
 
 **Why it happens:**
-Developers focus on the "happy path" — the command runs and finishes. Edge cases like signal interruption, early return on error, or panic paths cause `Wait()` to be skipped.
+It feels premature to cap logs when the initial goal is just "capture some output." Developers plan to add a cap "later" and it never happens.
 
 **How to avoid:**
-- Use `defer cmd.Wait()` immediately after a successful `cmd.Start()`
-- If the exit code matters (it does for `rtx`), don't use naked defer — capture the error: `waitErr = cmd.Wait()` in a deferred closure
-- Never use `Process.Release()` as a substitute — it explicitly leaves a zombie on the system
-- In cleanup/signal handler paths, ensure `Wait()` is still called even if the process was killed
+Implement a ring buffer from the start with a configurable cap (1,000 lines is a reasonable default). When at capacity, evict the oldest line before appending:
+```go
+if len(lb.lines) >= lb.cap {
+    lb.lines = lb.lines[1:]  // shift out oldest
+}
+lb.lines = append(lb.lines, line)
+```
+Note: `lb.lines[1:]` keeps the backing array allocated. For a simple ring buffer at this scale, this is acceptable. The oldest 1 element is dropped per append; the slice length never exceeds `cap`. No reallocation happens after the first fill.
 
 **Warning signs:**
-- `ps aux | grep Z` shows zombie entries with the child command name
-- `cmd.Process` is non-nil but `Wait()` was never called
-- Process table entry persists after the child exits
+- Go process RSS memory grows continuously during a long-running managed process
+- `runtime.MemStats.HeapAlloc` grows monotonically
+- Managed process with verbose output causes the API server to OOM
 
-**Phase to address:** Process execution foundation — every code path through the runner must call `Wait()`
+**Phase to address:** Scheduler process struct and log buffer (Step 2 in build order)
 
 ---
 
-### Pitfall 3: Signal Handling With an Unbuffered Channel — Dropped Signals
+### Pitfall 5: Holding the Scheduler Mutex While Calling cmd.Start() — Deadlock Risk
 
 **What goes wrong:**
-`signal.Notify(c, ...)` requires a buffered channel. If the channel is unbuffered (capacity 0), the signal package does a non-blocking send — if the goroutine is not immediately ready to receive, the signal is silently dropped. The process runner appears to ignore signals.
+`cmd.Start()` can block briefly (it forks the OS process, which involves syscalls). More critically, if the lock is held while `cmd.Start()` runs, and the `Wait()` goroutine (spawned inside `cmd.Start()` for pipe copying) tries to acquire a lock on the same mutex to update process state, a deadlock occurs. Even without a deadlock, holding a write lock during `cmd.Start()` serializes all API requests (including reads) for the duration of process startup — which on a loaded system can be measurable.
 
 **Why it happens:**
-Go's `make(chan os.Signal)` creates an unbuffered channel by default. This is idiomatic for most Go channel uses, but `signal.Notify` is a documented exception. The error is subtle — it compiles and usually works until a signal arrives at the wrong moment.
+Developers acquire `s.mu.Lock()` at the top of `Start()` to protect the `processes` map, and keep it locked throughout the function body including the `cmd.Start()` call and goroutine spawn.
 
 **How to avoid:**
+Use a two-phase pattern: lock to read/validate process state, unlock before calling `cmd.Start()`, then lock again to write the updated state (pid, running status):
 ```go
-// WRONG — unbuffered, signals can be dropped
-sigCh := make(chan os.Signal)
+func (s *Scheduler) Start(id string) error {
+    s.mu.Lock()
+    p, ok := s.processes[id]
+    if !ok { s.mu.Unlock(); return ErrNotFound }
+    if p.state == StateRunning { s.mu.Unlock(); return ErrAlreadyRunning }
+    p.state = StateStarting
+    s.mu.Unlock()  // release before syscall
 
-// CORRECT — buffered size 1 is sufficient for a single signal type
+    cmd := exec.Command(p.def.Command, p.def.Args...)
+    cmd.Stdout = p.logBuf
+    cmd.Stderr = p.logBuf
+    cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+    if err := cmd.Start(); err != nil {
+        s.mu.Lock(); p.state = StateIdle; s.mu.Unlock()
+        return err
+    }
+
+    s.mu.Lock()
+    p.cmd = cmd
+    p.pid = cmd.Process.Pid
+    p.state = StateRunning
+    s.mu.Unlock()
+
+    go s.waitProcess(p)  // non-blocking wait goroutine
+    return nil
+}
+```
+
+**Warning signs:**
+- `go test -race` hangs on scheduler tests
+- High API latency when starting multiple processes simultaneously
+- Deadlock in test: goroutine blocked on mutex acquisition inside `cmd.Wait()` callback
+
+**Phase to address:** Scheduler start/stop implementation (Step 3 in build order)
+
+---
+
+### Pitfall 6: Dependency Cycle Not Detected — Silent Deadlock on Start
+
+**What goes wrong:**
+If Process A depends on B, and B depends on A, and the cycle is not detected at `Start()` time, the dependency resolution loops forever or (with a visited-set approach) produces a wrong start order. The scheduler tries to start A, waits for B to be running, starts B, waits for A to be running — neither ever starts. No error is returned to the API caller; the HTTP response hangs until a timeout.
+
+**Why it happens:**
+Developers implement a simple DFS for dependency ordering without distinguishing between "visited" and "currently in the recursion stack," which is the necessary distinction for cycle detection (vs. DAG traversal).
+
+**How to avoid:**
+Use two maps: `visited` (fully processed) and `inStack` (currently being recursed into). If `inStack[id]` is true when `visit(id)` is called again, a cycle is detected:
+```go
+func topoSort(start string, processes map[string]*ManagedProcess) ([]string, error) {
+    visited := map[string]bool{}
+    inStack := map[string]bool{}
+    order   := []string{}
+
+    var visit func(id string) error
+    visit = func(id string) error {
+        if inStack[id] {
+            return fmt.Errorf("dependency cycle detected: %s", id)
+        }
+        if visited[id] {
+            return nil
+        }
+        inStack[id] = true
+        p, ok := processes[id]
+        if !ok {
+            return fmt.Errorf("unknown dependency: %s", id)
+        }
+        for _, dep := range p.def.DependsOn {
+            if err := visit(dep); err != nil {
+                return err
+            }
+        }
+        inStack[id] = false
+        visited[id] = true
+        order = append(order, id)
+        return nil
+    }
+    return order, visit(start)
+}
+```
+
+**Warning signs:**
+- `POST /api/processes/{id}/start` hangs and eventually returns a timeout error
+- Scheduler has no entry in its logs for "starting dependency X"
+- Two processes defined with each other in their `dependsOn` lists cause the API to become unresponsive
+
+**Phase to address:** Dependency ordering implementation (Step 4 in build order)
+
+---
+
+### Pitfall 7: Restart Goroutine Leaks When Stop() Is Called During Backoff Wait
+
+**What goes wrong:**
+When a process exits and the restart policy fires, `scheduleRestart()` spawns a goroutine that sleeps for the backoff duration then calls `s.Start(p.def.ID)`. If the user calls `Stop()` on the process (setting its state to `stopped`) while the restart goroutine is sleeping, the goroutine wakes up after the sleep, ignores the stop, and restarts the process anyway. The process appears to ignore the stop command and keeps restarting. Multiple rapid stop/start cycles can accumulate multiple leaked restart goroutines that all eventually fire.
+
+**Why it happens:**
+The restart goroutine is spawned and forgotten — it has no cancellation mechanism. The sleep is a blind `time.Sleep(delay)` with no select on a stop signal.
+
+**How to avoid:**
+Assign each `ManagedProcess` a `restartCancel context.CancelFunc`. When spawning the restart goroutine, derive a context from it. When `Stop()` is called, call `restartCancel()` to abort any pending restart:
+```go
+type ManagedProcess struct {
+    // ...
+    restartCtx    context.Context
+    restartCancel context.CancelFunc
+}
+
+func (s *Scheduler) scheduleRestart(p *ManagedProcess, exitCode int) {
+    // ... policy checks ...
+    delay := computeBackoff(p)
+
+    ctx, cancel := context.WithCancel(context.Background())
+    p.restartCancel = cancel  // overwrite previous cancel (already called)
+
+    go func() {
+        select {
+        case <-time.After(delay):
+            s.Start(p.def.ID)
+        case <-ctx.Done():
+            // Stop() was called — do not restart
+        }
+    }()
+}
+
+func (s *Scheduler) Stop(id string) error {
+    s.mu.Lock()
+    p := s.processes[id]
+    if p.restartCancel != nil {
+        p.restartCancel()  // cancel pending restart goroutine
+    }
+    p.state = StateStopping
+    s.mu.Unlock()
+    // send SIGTERM to child...
+}
+```
+
+**Warning signs:**
+- `Stop()` returns success but the process restarts a few seconds later
+- After repeated stop attempts, the process spawns more rapidly than expected
+- `runtime.NumGoroutine()` grows proportionally to stop/start cycles
+
+**Phase to address:** Restart policy implementation (Step 5 in build order)
+
+---
+
+### Pitfall 8: Exponential Backoff Integer Overflow After Many Restarts
+
+**What goes wrong:**
+The pattern `delay := initialWait * (1 << restartCount)` uses a bit shift to compute `2^n`. After 63 restarts (on a 64-bit system), the shift overflows to zero or a negative duration. After only ~30 restarts with a 1-second initial wait, the computed delay exceeds 30 years. Without a cap, the delay becomes effectively infinite or wraps around to negative, causing `time.Sleep` to either wait forever or return immediately and cause a rapid restart loop.
+
+**Why it happens:**
+Bit shift as `2^n` looks clean and correct for small values. The cap-at-maximum step is easy to forget or write incorrectly.
+
+**How to avoid:**
+Always apply a cap before the sleep, and apply it before the shift to prevent overflow:
+```go
+func computeBackoff(p *ManagedProcess) time.Duration {
+    r := p.def.Restart
+    // cap restarts used for shift to avoid overflow
+    n := p.restarts
+    if n > 30 {
+        n = 30  // 2^30 * 1s = ~12 days, well above any MaxWait
+    }
+    delay := r.InitialWait * (1 << uint(n))
+    if delay > r.MaxWait || delay < 0 {  // < 0 catches overflow
+        delay = r.MaxWait
+    }
+    return delay
+}
+```
+
+**Warning signs:**
+- After many restarts, process restarts immediately without any delay
+- `time.Sleep` with a very large `time.Duration` causes the goroutine to appear permanently blocked
+- Restart count exceeds 32 and behavior becomes erratic
+
+**Phase to address:** Restart policy implementation (Step 5 in build order)
+
+---
+
+### Pitfall 9: REST Handler Blocks on Process Startup — cmd.Run() in HTTP Handler
+
+**What goes wrong:**
+If a `POST /api/processes/{id}/start` handler calls any blocking process function (directly or indirectly), the HTTP handler goroutine is held for the lifetime of the child process. The HTTP client receives no response until the process exits. Other API requests that arrive during this time may also block if they attempt to acquire the scheduler's write lock. The server appears to hang.
+
+**Why it happens:**
+Developers migrating from a CLI pattern write the process start inline in the handler without recognizing that `net/http` runs each request in its own goroutine but expects that goroutine to return promptly.
+
+**How to avoid:**
+The HTTP handler calls `scheduler.Start(id)` which returns immediately after `cmd.Start()` succeeds. The response is `202 Accepted`, not `200 OK`. The process runs asynchronously; clients poll status via `GET /api/processes/{id}`:
+```go
+func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
+    id := r.PathValue("id")
+    if err := h.scheduler.Start(id); err != nil {
+        writeError(w, err)
+        return
+    }
+    writeJSON(w, http.StatusAccepted, map[string]string{"status": "starting"})
+}
+```
+
+**Warning signs:**
+- `POST /start` hangs until the process exits
+- API returns status `200` for start, not `202`
+- Only one process can be "started" at a time (others time out waiting)
+
+**Phase to address:** API handler implementation (Step 6 in build order)
+
+---
+
+### Pitfall 10: Missing CORS Middleware — React SPA Cannot Reach the API
+
+**What goes wrong:**
+The React dev server runs on `localhost:5173` (Vite default). The Go API runs on `localhost:8080`. Any fetch from the React app to the Go API is cross-origin. Without `Access-Control-Allow-Origin` response headers, the browser blocks the response. Without handling `OPTIONS` preflight requests, any non-simple request (POST, DELETE, custom headers like `Content-Type: application/json`) fails silently with a CORS error in the browser console. The API works fine with `curl` and Postman (which do not enforce CORS), leading to confusion.
+
+**Why it happens:**
+CORS is a browser-only restriction. Backend developers test with curl and see success. The problem only surfaces when the browser client runs. The OPTIONS preflight is especially easy to miss — it is a separate HTTP request the browser sends automatically before the actual request.
+
+**How to avoid:**
+Add a CORS middleware that wraps all routes. Handle `OPTIONS` explicitly:
+```go
+func corsMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+        if r.Method == http.MethodOptions {
+            w.WriteHeader(http.StatusNoContent)
+            return
+        }
+        next.ServeHTTP(w, r)
+    })
+}
+```
+During development, allow `*`. During production, restrict to the specific deployed origin.
+
+Additionally, configure the Vite dev server proxy to forward `/api/*` to `:8080` to avoid CORS during development entirely:
+```ts
+// vite.config.ts
+export default defineConfig({
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8080'
+    }
+  }
+})
+```
+Note: the Vite proxy works only in `npm run dev` mode. Production builds served by the Go server do not use it — the API must still have correct CORS headers for any non-same-origin deployment.
+
+**Warning signs:**
+- Browser console shows: `Access to fetch at 'http://localhost:8080' from origin 'http://localhost:5173' has been blocked by CORS policy`
+- `curl` works; browser does not
+- DELETE and POST with `Content-Type: application/json` fail but GET succeeds (simple vs. preflighted requests)
+
+**Phase to address:** API server setup (Step 6 in build order) — required before any frontend integration
+
+---
+
+### Pitfall 11: React Polling Without useEffect Cleanup — Memory Leak and State-on-Unmounted-Component
+
+**What goes wrong:**
+`setInterval(() => fetchLogs(), 2000)` in a `useEffect` without a cleanup function continues firing after the component unmounts (e.g., when the user navigates away). Each interval tick calls `fetch` and then attempts `setState(...)` on the unmounted component. React logs a warning ("Can't perform a React state update on an unmounted component") and the ongoing fetches cause a memory leak. In React 18+, the warning is suppressed but the leak persists.
+
+Additionally, in-flight fetch requests from a previous render cycle complete after the component unmounts and attempt to update state — same problem.
+
+**Why it happens:**
+Developers familiar with imperative patterns write `useEffect(() => { setInterval(...) }, [])` without knowing that the return value of the `useEffect` callback is the cleanup function.
+
+**How to avoid:**
+Always return a cleanup function from polling `useEffect`s. Use `AbortController` to cancel in-flight fetches on unmount:
+```tsx
+useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const poll = async () => {
+        try {
+            const res = await fetch(`/api/processes/${id}/logs`, {
+                signal: controller.signal
+            });
+            if (!cancelled) {
+                const data = await res.json();
+                setLines(data.lines);
+            }
+        } catch (e) {
+            if ((e as Error).name !== 'AbortError') {
+                console.error(e);
+            }
+        }
+    };
+
+    poll();
+    const interval = setInterval(poll, 2000);
+
+    return () => {
+        cancelled = true;
+        controller.abort();
+        clearInterval(interval);
+    };
+}, [id]);
+```
+
+**Warning signs:**
+- Console warning: "Can't perform a React state update on an unmounted component"
+- Network tab shows ongoing `/api/processes/{id}/logs` requests after navigating away from LogViewer
+- Memory usage grows monotonically as the user opens/closes the log viewer repeatedly
+
+**Phase to address:** React frontend log viewer (Step 8 in build order)
+
+---
+
+### Pitfall 12: http.ListenAndServe Blocks Main Goroutine — Signal Handler Never Runs
+
+**What goes wrong:**
+`http.ListenAndServe(addr, handler)` blocks the calling goroutine until the server exits. If the `rtx serve` subcommand calls `ListenAndServe` directly in the main goroutine and then tries to listen for OS signals on the same goroutine, the signal handler never runs — execution never reaches it. The server cannot be gracefully shut down and must be killed hard (`SIGKILL`), leaving managed processes as orphans.
+
+**Why it happens:**
+`ListenAndServe` looks like a final call — "start the server and run forever" — which makes developers forget it needs to be in a goroutine if anything else needs to happen concurrently (signal handling, context cancellation).
+
+**How to avoid:**
+Run the server in a goroutine. Listen for signals in the main goroutine. Use `server.Shutdown()` with a timeout context:
+```go
+srv := &http.Server{Addr: addr, Handler: mux}
+
+go func() {
+    if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+        log.Fatalf("[rtx] server error: %v", err)
+    }
+}()
+
 sigCh := make(chan os.Signal, 1)
 signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-```
+<-sigCh
 
-`go vet` now flags unbuffered channels passed to `signal.Notify` — run it.
-
-**Warning signs:**
-- `go vet` reports `misuse of unbuffered os.Signal channel`
-- Ctrl+C sometimes kills the runner but other times has no effect
-- Signal handling is reliable in tests but intermittent in real use
-
-**Phase to address:** Signal handling phase — the very first line of signal code
-
----
-
-### Pitfall 4: Signals Not Forwarded to Child — Child Ignores Ctrl+C
-
-**What goes wrong:**
-Intercepting SIGINT in the Go parent with `signal.Notify` stops the OS from delivering that signal to the child. The Go process catches it, but the child never sees it. The child keeps running, and the runner hangs waiting for a process that will never exit.
-
-**Why it happens:**
-This is the correct behavior of `signal.Notify` — it stops the default action (which would have terminated the program) and routes the signal to the channel. But it also prevents propagation down the process tree unless the developer explicitly re-sends it.
-
-**How to avoid:**
-After catching the signal, explicitly forward it to the child:
-```go
-cmd.Process.Signal(sig)  // forward the caught signal
-```
-Then call `cmd.Wait()` to wait for the child to finish its cleanup before the runner exits.
-
-**Warning signs:**
-- Ctrl+C in the terminal causes the runner to print "signal received" but hangs indefinitely afterward
-- Child process remains running (`ps`) after Ctrl+C
-- runner exits but child process lives on as an orphan
-
-**Phase to address:** Signal handling phase
-
----
-
-### Pitfall 5: Process Group Conflict — Child Receives Signal Twice (or Zero Times)
-
-**What goes wrong:**
-Two conflicting approaches produce opposite bugs:
-
-1. **No Setpgid (default):** Child is in the same process group as the runner. Ctrl+C sends SIGINT to the entire foreground process group — both runner and child receive it simultaneously. The child exits, then the runner tries to forward the signal to an already-dead process (returns "process already finished" error).
-
-2. **Setpgid: true:** Child is placed in a new process group. Ctrl+C only reaches the runner. The runner must explicitly forward signals. If it forgets, the child never receives any signal.
-
-For `rtx` (a transparent process runner, not a daemon), the correct model is: runner forwards signal to child, then waits for child to finish, then exits with child's exit code. Neither blind Setpgid nor ignoring the issue produces this correctly.
-
-**Why it happens:**
-The behavior of Setpgid is subtle and depends on the runner's intended role. Daemon-style runners want Setpgid. Transparent forwarders (like `rtx`) generally do not — but they must handle the case where the child has already exited when the forward attempt occurs.
-
-**How to avoid:**
-For `rtx` (transparent forwarder):
-- Do NOT set Setpgid — let child inherit the process group
-- Intercept signals, forward to child, swallow "process already finished" errors from Signal()
-- Always call `cmd.Wait()` regardless
-
-```go
-if err := cmd.Process.Signal(sig); err != nil {
-    // process may have already exited — not an error worth propagating
-    if !errors.Is(err, os.ErrProcessDone) {
-        log.Printf("signal forward failed: %v", err)
-    }
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+if err := srv.Shutdown(ctx); err != nil {
+    log.Printf("[rtx] shutdown error: %v", err)
 }
+// additional cleanup: stop all managed processes
 ```
+`http.ErrServerClosed` is a normal return when `Shutdown()` is called — do not treat it as a fatal error.
 
 **Warning signs:**
-- Double output of signal-related log lines
-- "os: process already finished" errors in logs
-- Ctrl+C kills runner but child continues running
+- Signal handling code after `ListenAndServe` is never reached
+- Ctrl+C on `rtx serve` kills the server without graceful shutdown
+- Managed child processes remain running after `rtx serve` exits
 
-**Phase to address:** Signal handling phase — requires deliberate design decision before coding
-
----
-
-### Pitfall 6: Exit Code Lost — Always Returning 0 or 1
-
-**What goes wrong:**
-When the child process exits with a non-zero code, `cmd.Wait()` returns a non-nil error of type `*exec.ExitError`. If the runner does `if err != nil { os.Exit(1) }`, it swallows the real exit code and always reports 1. Callers (CI systems, shell scripts) that rely on exact exit codes receive wrong information.
-
-**Why it happens:**
-The `*exec.ExitError` type isn't well-known. Many developers know `cmd.Run()` returns an error but don't know how to extract the integer code from it. Before Go 1.12, extraction required importing `syscall` and a platform-specific cast. Now `ExitCode()` is available but not widely documented.
-
-**How to avoid:**
-```go
-waitErr := cmd.Wait()
-if waitErr != nil {
-    var exitErr *exec.ExitError
-    if errors.As(waitErr, &exitErr) {
-        os.Exit(exitErr.ExitCode())
-    }
-    // Non-ExitError: runner infrastructure failure (e.g., I/O error)
-    fmt.Fprintf(os.Stderr, "rtx: %v\n", waitErr)
-    os.Exit(1)
-}
-os.Exit(0)
-```
-
-Also: `os.Exit()` bypasses `defer`. Structure the main function so the real exit code is returned from an inner function, and `main()` calls `os.Exit()` on the result — this preserves deferred cleanup.
-
-**Warning signs:**
-- `echo $?` always returns 0 or 1 regardless of what the child does
-- Shell scripts treating `rtx` as a transparent wrapper behave incorrectly
-- CI pipeline shows "success" when the wrapped command failed
-
-**Phase to address:** Process execution foundation — exit code extraction must be built in from the start
-
----
-
-### Pitfall 7: cmd.Wait() Blocks Forever When Grandchild Inherits Pipe
-
-**What goes wrong:**
-If the child process spawns its own child (grandchild) and passes the pipe file descriptors to it, and the child exits without waiting for the grandchild, the grandchild now holds an open write end of the stdout/stderr pipe. `cmd.Wait()` waits for EOF on the pipes before returning — it never gets EOF because the grandchild is still running. The runner hangs forever.
-
-**Why it happens:**
-`cmd.Wait()` spawns internal goroutines that copy from the pipe to the writer. These goroutines exit on EOF. If a grandchild keeps the pipe open, EOF never arrives.
-
-**How to avoid:**
-Go 1.20 added `WaitDelay` and the improved `CommandContext` cancel behavior to bound this case. For `rtx` in v0 (single-process focus, no grandchild concerns), this is lower priority — but still worth understanding:
-
-```go
-cmd.WaitDelay = 5 * time.Second  // unblock Wait() if pipes don't close
-```
-
-For v0, using `cmd.Stdout = os.Stdout` (direct `*os.File` assignment) avoids the internal goroutine entirely — `Wait()` does not spawn goroutines when Stdout/Stderr are `*os.File`. This sidesteps the problem completely.
-
-**Warning signs:**
-- Runner hangs after child process exits
-- Child PID is no longer in `ps` but the runner process is still running
-- No further output but process doesn't terminate
-
-**Phase to address:** Process execution foundation — avoided by using direct file assignment for output
+**Phase to address:** `rtx serve` subcommand implementation (Step 7 in build order)
 
 ---
 
@@ -217,11 +518,15 @@ For v0, using `cmd.Stdout = os.Stdout` (direct `*os.File` assignment) avoids the
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| `cmd.Output()` / `cmd.CombinedOutput()` for "simple" output capture | One line of code | Buffers all output in memory; no real-time streaming; no exit code distinction | Never for rtx — streaming is a core requirement |
-| `os.Exit(1)` on any `cmd.Wait()` error | Simple error handling | Swallows real exit codes; breaks callers | Never — use ExitError.ExitCode() |
-| Ignoring the error from `cmd.Process.Signal()` entirely | Less code | Hides legitimate forwarding failures vs. expected "already exited" cases | Acceptable if using `errors.Is(err, os.ErrProcessDone)` to distinguish |
-| Using `cmd.Run()` instead of `cmd.Start()` + `cmd.Wait()` | Simpler call | Incompatible with pipe-based streaming; no interruptibility | Acceptable only for fire-and-forget with direct os.Stdout/os.Stderr assignment |
-| Buffered output via `bytes.Buffer` | Simple to implement | Memory grows unbounded for long-running processes; no real-time output | Never for rtx |
+| `cmd.Stdout = os.Stdout` in scheduler | No code change from v1.0 | Logs unavailable via API; all process output mixed in terminal | Never — log capture is a v1.1 requirement |
+| Growing `[]string` log slice (no ring buffer) | Simple `append` | OOM for verbose long-running processes | Never — implement ring buffer from the start |
+| Scheduler-level `mu` protecting log buffer reads/writes | One lock for everything | Forces serialization of log I/O with all scheduler operations; reduces throughput | Never — give logBuffer its own lock |
+| `time.Sleep(delay)` restart goroutine with no cancellation | Simple to implement | Stop() cannot abort a pending restart; goroutine leaks accumulate | Never — use select on a cancellable context |
+| `1 << restartCount` bit shift with no cap | Looks correct for small N | Integer overflow after ~30 restarts; silent rapid-restart loop | Never — cap both the shift operand and the result |
+| CORS wildcard `*` origin in production | Works everywhere | Allows any origin to make authenticated requests | Acceptable for v1.1 single-user local deployment; not for multi-user production |
+| No `OPTIONS` preflight handler | Works for GET requests | All POST/DELETE/PUT requests fail from browser with CORS error | Never — always handle OPTIONS if you have non-GET routes |
+| `setInterval` without `clearInterval` cleanup | Simpler code | Memory leak; state updates on unmounted component | Never |
+| `http.ListenAndServe` in main goroutine | One less goroutine | Signal handler unreachable; no graceful shutdown | Never — always run in goroutine |
 
 ---
 
@@ -229,11 +534,13 @@ For v0, using `cmd.Stdout = os.Stdout` (direct `*os.File` assignment) avoids the
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Terminal / TTY | Setting `cmd.Stdout = os.Stdout` while also using `StdoutPipe()` — panics at Start | Choose one method: either direct assignment OR pipe, never both |
-| Shell built-ins | Running `cd`, `source`, `export` directly via `exec.Command` — they don't exist as executables | Wrap in `sh -c "..."` if shell built-ins are needed; for rtx, document this limitation |
-| PATH resolution | Relying on implicit `.` in PATH for local executables (Go 1.19+ ErrDot) | Use `./binary` explicit prefix for local executables |
-| Signal to killed process | Forwarding signal after child is already dead returns `os.ErrProcessDone` | Swallow this specific error; it is expected, not a bug |
-| Deferred cleanup + os.Exit | `defer` statements don't run when `os.Exit()` is called | Use the inner-function-returns-int pattern for main |
+| runner.go → scheduler | Calling `process.Run()` for process lifecycle | Reuse patterns (Setpgid, Start, doneCh goroutine), not the function |
+| logBuffer → cmd.Stdout | Assigning non-goroutine-safe writer; race between stdout/stderr copy goroutines | `logBuffer` has its own `sync.Mutex`; both Stdout and Stderr point to same locked buffer |
+| scheduler → HTTP handler | Returning pointer to `ManagedProcess` from scheduler methods | Return a value copy (`ProcessStatus`) — callers must not hold a pointer to internal state |
+| React → Go API | Calling `fetch('/api/...')` without handling non-2xx responses | Check `response.ok`; surface error state in UI; don't silently ignore API errors |
+| Vite proxy → Go API | Relying on Vite proxy in production build | Proxy only works in dev; Go API must serve built React static files in production |
+| Stop() → restart goroutine | Calling Stop() while restart backoff sleep is in progress | Cancel the restart context in Stop() before sending SIGTERM to child |
+| http.ErrServerClosed → error log | Treating ErrServerClosed as a fatal server error | Check `errors.Is(err, http.ErrServerClosed)` and ignore it — it is normal shutdown |
 
 ---
 
@@ -241,9 +548,10 @@ For v0, using `cmd.Stdout = os.Stdout` (direct `*os.File` assignment) avoids the
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `bytes.Buffer` for stdout capture | Memory grows proportional to command output | Use direct `cmd.Stdout = os.Stdout` assignment for pass-through | Any long-running command with verbose output |
-| StdoutPipe + single goroutine reading both stdout and stderr sequentially | Deadlock when stderr fills pipe buffer while stdout goroutine is blocked | Separate goroutines for each stream, or use direct file assignment | When command writes > ~65KB to either stream before the other is consumed |
-| Synchronous signal handling (no goroutine) | Signal arrives, handler blocks on `cmd.Process.Signal()`, next signal missed | Use goroutine for signal dispatch; keep the signal channel receive loop tight | In shutdown sequences where multiple signals arrive quickly |
+| No ring buffer cap on logBuffer | API server RSS grows indefinitely | Ring buffer with 1,000-line cap from the start | Any verbose long-running process |
+| Scheduler-level write lock held during `cmd.Start()` | All API operations serialize with process startup | Release lock before `cmd.Start()`; re-acquire to write state after | When starting multiple processes simultaneously |
+| React polling interval too short | Network tab shows constant requests; backend log shows flood of GET requests | 2-second polling interval is sufficient for log updates; use `useEffect` with `id` dep, not every render | Any polling interval under 500ms with multiple open LogViewers |
+| `GET /api/processes` locking scheduler on every list request | List operations block all writes temporarily | `RLock` for reads; return snapshot copy of state, not live map reference | When list is called frequently (e.g., polled by process list UI) |
 
 ---
 
@@ -251,22 +559,39 @@ For v0, using `cmd.Stdout = os.Stdout` (direct `*os.File` assignment) avoids the
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Shell-wrapping user input: `exec.Command("sh", "-c", userInput)` | Shell injection — arbitrary command execution | For rtx, use `exec.Command(args[0], args[1:]...)` directly — no shell involved |
-| Executing relative paths from PATH without validation | PATH hijacking if CWD is writable | Use `exec.LookPath` explicitly and validate the resolved absolute path if needed |
-| Leaking parent environment to child unconditionally | Sensitive env vars (tokens, passwords) passed to untrusted child | Explicitly construct `cmd.Env` from a safe allowlist; don't blindly inherit `os.Environ()` for untrusted commands |
+| `exec.Command("sh", "-c", userInput)` — shell wrapping user-supplied command | Shell injection — arbitrary command execution with the API server's privileges | Use `exec.Command(args[0], args[1:]...)` directly, as in v1.0; document that shell built-ins are not supported |
+| CORS wildcard `*` with `Access-Control-Allow-Credentials: true` | Any origin can make credentialed requests to the process manager API | Never combine wildcard origin with credentials; for v1.1 single-user local, avoid credentials header entirely |
+| No validation of process `command` field in API handler | User can register arbitrary commands (e.g., `rm -rf /`) via POST /api/processes | Document scope: v1.1 is single-user, single-machine; no remote access assumed. Add allowlist if remote access is added later |
+| Child processes inheriting API server's full environment | Sensitive env vars (API keys, credentials in env) passed to all managed processes | Explicitly set `cmd.Env` in the scheduler; do not blindly pass `os.Environ()` |
+
+---
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Polling log viewer replaces all lines on each tick | Log viewer "flashes" on every poll; user loses scroll position | Track line count; append only new lines; preserve scroll position unless user has scrolled to bottom |
+| No visual indicator for process state transitions | "starting" and "stopping" states look identical to "running" from the UI; user does not know if action is in progress | Show distinct visual states for idle/starting/running/stopping/stopped with appropriate colors |
+| Error responses from API not surfaced in UI | User clicks "Start", nothing happens, no feedback | All fetch calls check `response.ok`; non-2xx responses show an error message in the UI |
+| Log viewer always polls even for stopped processes | Unnecessary network requests for processes that are not running | Stop polling when `process.status === 'stopped'`; resume if status changes to `running` |
+| Deleting a running process | Process continues running as unmanaged orphan | Validate in API: DELETE returns 409 Conflict if process is not stopped; UI disables Delete button for running processes |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Signal handling:** Signals are intercepted AND forwarded to child — verify child actually exits on Ctrl+C, not just the runner
-- [ ] **Exit code:** `echo $?` after `rtx run false` returns exactly `1`; after `rtx run sh -c 'exit 42'` returns exactly `42`
-- [ ] **Zombie prevention:** After child exits, verify no zombie in `ps aux | grep Z` while runner is still alive
-- [ ] **Real-time streaming:** Long-running commands (e.g., `rtx run yes`) show output line-by-line, not all at once at exit
-- [ ] **Error vs. exit:** `rtx run nonexistent-command` reports "command not found" with a non-zero exit code, not a panic or generic error
-- [ ] **Graceful shutdown order:** On SIGTERM, runner waits for child to fully exit before exiting itself — not the other way around
-- [ ] **os.Exit skips defer:** Any deferred cleanup (file closes, log flushes) runs before the runner exits — use the inner-function pattern
-- [ ] **Second signal handling:** If child ignores SIGTERM, a second Ctrl+C should escalate (or at minimum not hang) — decide the policy and implement it
+- [ ] **Log capture:** `GET /api/processes/{id}/logs` returns actual output from the managed process — verify with `echo "hello"` as the process command
+- [ ] **Log race safety:** `go test -race ./internal/scheduler/...` passes with no data race errors on the log buffer
+- [ ] **Ring buffer eviction:** After 1,001 lines of output, the first line is gone and the buffer holds exactly 1,000 lines
+- [ ] **Zombie prevention in scheduler:** After a managed process exits, no zombie appears in `ps aux | grep Z` while the API server is still running
+- [ ] **Dependency ordering:** Process B (depends on A) does not start until A is in `running` state — verify start order in logs
+- [ ] **Cycle detection:** Adding Process A → depends on B, B → depends on A; calling `POST /api/processes/A/start` returns 400 with "dependency cycle detected", not a hang
+- [ ] **Stop cancels restart:** `Stop()` on a process with `restart: always` stops it and it does not restart — verify by checking status after 10 seconds
+- [ ] **Backoff cap:** After 100 restart attempts, the delay between restarts is capped at `MaxWait` and does not grow further or overflow
+- [ ] **CORS preflight:** `OPTIONS /api/processes` returns 204 with correct `Access-Control-Allow-*` headers — verify with `curl -X OPTIONS -v`
+- [ ] **Graceful shutdown:** `Ctrl+C` on `rtx serve` stops the HTTP server and sends SIGTERM to all managed processes before exiting
+- [ ] **React cleanup:** Opening and closing the LogViewer 10 times; `chrome://inspect` heap snapshot shows no growing listener or interval accumulation
+- [ ] **Vite proxy not relied on in production:** The built React app served by Go (`/`) fetches `/api/...` and receives correct responses without Vite running
 
 ---
 
@@ -274,11 +599,14 @@ For v0, using `cmd.Stdout = os.Stdout` (direct `*os.File` assignment) avoids the
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Zombie processes discovered in production | LOW | Add `defer cmd.Wait()` after `cmd.Start()` in all code paths; deploy fix |
-| Exit codes always 1 — callers broken | MEDIUM | Replace `os.Exit(1)` with `ExitError.ExitCode()` extraction; test with `sh -c 'exit N'` cases |
-| Signals not forwarded — child orphaned on Ctrl+C | MEDIUM | Add explicit `cmd.Process.Signal(sig)` in signal handler; test with `sleep 100` as child |
-| Deadlock on large command output | MEDIUM | Switch from `bytes.Buffer` capture to direct `os.Stdout`/`os.Stderr` assignment |
-| cmd.Wait() hangs due to grandchild pipe inheritance | HIGH | Add `WaitDelay`; switch to direct `*os.File` assignment to avoid internal copy goroutines entirely |
+| process.Run() called from scheduler — blocking design discovered | HIGH | Refactor scheduler to manage `*exec.Cmd` directly; add per-process logBuffer; re-test all lifecycle scenarios |
+| Direct fd assignment discovered — no log capture | MEDIUM | Replace `cmd.Stdout = os.Stdout` with `cmd.Stdout = p.logBuf` in scheduler; add logBuffer type; re-test |
+| Log buffer data race discovered by -race | LOW-MEDIUM | Add `sync.Mutex` to logBuffer; ensure `Write()` and `Lines()` both acquire it; re-run -race |
+| Stop() not cancelling restart goroutine | MEDIUM | Add context.CancelFunc per process; cancel in Stop(); add test for stop-during-backoff scenario |
+| CORS blocking React from API | LOW | Add corsMiddleware before all routes; test with browser; add OPTIONS handler |
+| React polling not cleaning up | LOW | Add useEffect return cleanup function; clearInterval + controller.abort(); test by unmounting component |
+| ListenAndServe blocking signal handler | LOW | Move ListenAndServe to goroutine; add signal loop in main; add Shutdown() call with timeout |
+| Integer overflow in backoff | LOW | Cap shift operand at 30; cap result at MaxWait; add negative-duration guard |
 
 ---
 
@@ -286,60 +614,38 @@ For v0, using `cmd.Stdout = os.Stdout` (direct `*os.File` assignment) avoids the
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| StdoutPipe + Run() deadlock | Phase 1: Process execution foundation | Test: real-time output appears line-by-line for `rtx run yes | head -5` |
-| Zombie prevention (missing Wait) | Phase 1: Process execution foundation | Test: `ps aux | grep Z` after child exits with runner still alive |
-| Unbuffered signal channel | Phase 2: Signal handling | `go vet ./...` passes; rapid Ctrl+C never drops signal |
-| Signal not forwarded to child | Phase 2: Signal handling | Test: `rtx run sleep 100`, press Ctrl+C, verify sleep exits |
-| Process group / double signal | Phase 2: Signal handling | Test: verify no "process already finished" errors on normal Ctrl+C |
-| Exit code lost | Phase 1: Process execution foundation | Test: `rtx run sh -c 'exit 42'; echo $?` outputs `42` |
-| cmd.Wait() blocks (grandchild pipe) | Phase 1: Process execution foundation | Avoided entirely by using `cmd.Stdout = os.Stdout` (direct *os.File assignment) |
-| os.Exit() skips defer cleanup | Phase 1: Process execution foundation | Use inner-function-returns-int pattern from the start in main |
-| Windows SIGINT not sendable | Cross-platform phase (post-Linux) | Document Linux-first constraint; use build tags for platform-specific signal code |
-
----
-
-## Cross-Platform Gotchas (Linux vs. macOS vs. Windows)
-
-### Linux (First-Class Target)
-- SIGINT, SIGTERM, SIGKILL all work as expected
-- `setpgid` available via `syscall.SysProcAttr{Setpgid: true}`
-- `/proc` filesystem available for PID validation
-- Signal 0 (`process.Signal(syscall.Signal(0))`) can probe process existence
-
-### macOS
-- Signal behavior is largely identical to Linux for this use case
-- `Setpgid` works the same way
-- No `/proc` filesystem — cannot use `/proc/[pid]/status` for diagnostics
-- `syscall` package has Darwin-specific constants — use `golang.org/x/sys/unix` for portable Unix code
-
-### Windows — Significant Divergences
-- **SIGINT is not sendable to other processes** — `process.Signal(os.Interrupt)` returns "not supported" (tracked in Go issue #6720, #28498)
-- Windows uses `GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT)` instead, which requires a separate console group
-- SIGTERM does not exist on Windows — the only way to terminate a process is `TerminateProcess` (equivalent to SIGKILL)
-- Process groups work differently — `Setpgid` behavior differs
-- No POSIX-style signal inheritance
-- **Recommendation for rtx v0:** Declare Linux as the target platform. Add build constraints if cross-platform support is added later. Do not attempt to abstract signal differences in v0 — the abstraction is non-trivial and correctness on Linux is the stated goal.
+| Calling process.Run() from scheduler | Scheduler design (Step 3) | Scheduler has no import of `internal/process`; `Stop()` calls `cmd.Process.Signal()` |
+| Direct fd assignment — no log capture | Scheduler process struct (Step 2) | `GET /logs` returns actual process output |
+| logBuffer data race | Scheduler process struct (Step 2) | `go test -race ./internal/scheduler/...` passes |
+| Unbounded log memory | Scheduler process struct (Step 2) | Buffer evicts at 1,000 lines; memory stable for verbose process |
+| Lock held during cmd.Start() | Scheduler start/stop (Step 3) | `-race` test passes; simultaneous starts do not serialize |
+| Dependency cycle deadlock | Dependency ordering (Step 4) | Cycle returns error immediately; no hang |
+| Restart goroutine not cancellable | Restart policy (Step 5) | Stop during backoff prevents restart |
+| Backoff integer overflow | Restart policy (Step 5) | Delay never exceeds MaxWait after many restarts |
+| HTTP handler blocks on process start | API handlers (Step 6) | `POST /start` returns 202 immediately; process runs async |
+| Missing CORS middleware | API server setup (Step 6) | OPTIONS returns 204; React dev server can reach API |
+| React polling without cleanup | React frontend (Step 8) | No stale intervals; no state-on-unmounted-component warning |
+| ListenAndServe blocks signal handler | rtx serve subcommand (Step 7) | Ctrl+C triggers graceful shutdown within 10 seconds |
 
 ---
 
 ## Sources
 
-- [os/exec package — pkg.go.dev official docs](https://pkg.go.dev/os/exec) — HIGH confidence
-- [os/signal package — pkg.go.dev official docs](https://pkg.go.dev/os/signal) — HIGH confidence
-- [Go issue #52580: cmd.Wait must be called — documentation unclear](https://github.com/golang/go/issues/52580) — HIGH confidence
-- [Go issue #40467: cmd/go run does not relay signals to child process](https://github.com/golang/go/issues/40467) — HIGH confidence
-- [Go issue #6720: os.Interrupt is not sendable on Windows](https://github.com/golang/go/issues/6720) — HIGH confidence
-- [Go issue #28498: SIGINT not supported for other processes on Windows](https://github.com/golang/go/issues/28498) — HIGH confidence
-- [Go issue #21135: proposal — allow user of CommandContext to specify kill signal](https://github.com/golang/go/issues/21135) — HIGH confidence
-- [Go issue #19804: possible data race when using same writer for Stdout and Stderr](https://github.com/golang/go/issues/19804) — HIGH confidence
-- [Go issue #45604: misuse of unbuffered os.Signal channel](https://github.com/golang/go/issues/45604) — HIGH confidence
-- [DoltHub Blog: Useful Patterns for Go's os/exec](https://www.dolthub.com/blog/2022-11-28-go-os-exec-patterns/) — MEDIUM confidence
-- [Go Exec zombies and orphaned processes — SegmentFault](https://segmentfault.com/a/1190000041466423/en) — MEDIUM confidence
-- [Managing Linux Processes in Go — mezhenskyi.dev](https://mezhenskyi.dev/posts/go-linux-processes/) — MEDIUM confidence
-- [Killing a child process and all of its children in Go — Felix Geisendörfer](https://medium.com/@felixge/killing-a-child-process-and-all-of-its-children-in-go-54079af94773) — MEDIUM confidence
-- [SIGINT and SIGTERM Handling — go-task issue #75](https://github.com/go-task/task/issues/75) — MEDIUM confidence
-- [Reading os/exec.Cmd Output Without Race Conditions — hackmysql.com](https://hackmysql.com/rand/reading-os-exec-cmd-output-without-race-conditions/) — MEDIUM confidence
+- `internal/process/runner.go` — v1.0 codebase, direct read — HIGH confidence (patterns being adapted)
+- `.planning/research/ARCHITECTURE.md` — v1.1 architecture decisions — HIGH confidence
+- [os/exec package — pkg.go.dev](https://pkg.go.dev/os/exec) — `Cmd.Start`, `Cmd.Wait`, internal copy goroutines — HIGH confidence
+- [sync package — pkg.go.dev](https://pkg.go.dev/sync) — RWMutex, Mutex semantics — HIGH confidence
+- [Go 1.22 net/http — pkg.go.dev](https://pkg.go.dev/net/http) — ServeMux, PathValue, ErrServerClosed — HIGH confidence
+- [Go race detector — go.dev](https://go.dev/doc/articles/race_detector) — race detection methodology — HIGH confidence
+- [Go issue #19804: data race with same writer for Stdout/Stderr](https://github.com/golang/go/issues/19804) — HIGH confidence (concurrent copy goroutines from cmd.Start)
+- [Proper HTTP shutdown in Go — DEV Community](https://dev.to/mokiat/proper-http-shutdown-in-go-3fji) — ListenAndServe goroutine + Shutdown pattern — MEDIUM confidence
+- [React useEffect cleanup — refine.dev](https://refine.dev/blog/useeffect-cleanup/) — polling cleanup pattern — MEDIUM confidence
+- [AbortController in React — j-labs.pl](https://www.j-labs.pl/en/tech-blog/how-to-use-the-useeffect-hook-with-the-abortcontroller/) — fetch cancellation on unmount — MEDIUM confidence
+- [CORS common mistakes — corsfix.com](https://corsfix.com/blog/common-cors-mistakes) — OPTIONS preflight, wildcard+credentials — MEDIUM confidence
+- [Vite proxy CORS guide — dbi-services.com](https://www.dbi-services.com/blog/avoid-cors-requests-in-development-mode-with-vite/) — dev-only proxy limitation — MEDIUM confidence
+- [cenkalti/backoff Go implementation](https://github.com/cenkalti/backoff) — backoff cap and overflow prevention patterns — MEDIUM confidence
+- [Goroutine leak prevention — DEV Community](https://dev.to/serifcolakel/go-concurrency-mastery-preventing-goroutine-leaks-with-context-timeout-cancellation-best-1lg0) — context cancellation for background goroutines — MEDIUM confidence
 
 ---
-*Pitfalls research for: Go process runner CLI (Runtime X / rtx)*
-*Researched: 2026-02-27*
+*Pitfalls research for: Runtime X v1.1 — multi-process scheduler, Go REST API, React frontend*
+*Researched: 2026-03-01*

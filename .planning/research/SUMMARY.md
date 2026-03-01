@@ -1,17 +1,17 @@
 # Project Research Summary
 
-**Project:** Runtime-X / rtx
-**Domain:** Go process runner CLI (stdlib-only, Linux-first)
-**Researched:** 2026-02-27
+**Project:** Runtime X v1.1
+**Domain:** Multi-process scheduler, Go REST API, React frontend
+**Researched:** 2026-03-01
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The `rtx` binary is a transparent process runner CLI in the tradition of `tini` — its sole responsibility is to spawn one child process, stream its I/O without buffering, forward SIGINT and SIGTERM, reap the child to prevent zombies, and propagate the child's exact exit code. The closest production analog is `tini` (krallin/tini), but implemented as a Go CLI rather than a PID-1 init process. Research across all four domains is in strong agreement: the correct approach is a minimal, stdlib-only implementation using `cmd.Start()` + `cmd.Wait()` with a signal-forwarding goroutine and direct `os.Stdout`/`os.Stderr` file descriptor inheritance. No external dependencies are needed or appropriate.
+Runtime X v1.1 extends a proven v1.0 single-process CLI runner into a multi-process supervisor with a browser UI. The recommended approach is a zero-new-Go-dependencies architecture: `net/http` stdlib for the REST API (Go 1.22+ routing is fully capable for 8 endpoints), `sync.RWMutex` for in-memory scheduler state, and React 19 + Vite 7 for the frontend. The scheduler reuses patterns from `internal/process/runner.go` (Setpgid isolation, non-blocking Start, doneCh goroutine) but never calls `process.Run()` directly — that function is blocking and incompatible with concurrent multi-process management. The key differentiators over existing tools (supervisord, PM2, overmind) are dependency-aware start ordering via topological sort, exponential backoff restart policies per process, and a self-hosted REST API with a web log viewer in a single binary — a combination no reference tool provides.
 
-The recommended implementation is two Go packages: `internal/process/` (the process lifecycle logic) and `cmd/rtx/` (the CLI entry point). This follows the existing project convention of one `cmd/` subdirectory per binary and keeps all OS-process logic isolated from the Docker orchestration system already in the codebase. The entire feature set for v0 fits in roughly 60-80 lines of Go using only `os/exec`, `os/signal`, `syscall`, `os`, and `fmt`. The canonical implementation loop is already verified in STACK.md.
+The build must begin with codebase cleanup. The legacy Docker-related code (`internal/api/handlers.go`, `internal/worker/`, `cmd/main.go`, and 8 other packages) contains a broken build — `h.Scheduler` references an undefined type from a deleted models package. No new feature can be built until `go build ./...` passes cleanly on just the v1.0 CLI layer. After cleanup, the build order is strictly layered: scheduler types and log buffer first, then start/stop lifecycle, then dependency ordering, then restart policies, then the API layer, then the `serve` subcommand, then the React frontend. Each step compiles and tests independently before the next begins.
 
-The primary risks are all implementation pitfalls, not design unknowns. The most dangerous are: (1) using `cmd.Run()` instead of `cmd.Start()` + `cmd.Wait()`, which makes signal forwarding impossible; (2) forgetting to call `cmd.Wait()` on every code path, which creates zombie processes; and (3) using an unbuffered signal channel, which silently drops signals. All three pitfalls are caught early and avoided with the patterns in STACK.md. Research confidence is HIGH across all four domains because every recommendation traces to official Go stdlib documentation.
+The critical risks are all concurrency-related. The log buffer must have its own `sync.Mutex` independent of the scheduler's top-level `RWMutex` — log writes come from goroutines spawned by `cmd.Start()`, not from the scheduler's own code paths, and they race with HTTP handler reads. The scheduler's write lock must be released before calling `cmd.Start()` to prevent deadlock. Restart goroutines must be cancellable via `context.CancelFunc` so that `Stop()` can abort a pending backoff sleep. Integer overflow in exponential backoff must be capped at shift operand 30 with the result capped at `MaxWait`. Run `go test -race ./...` after every scheduler step — the race detector is the single most effective verification tool.
 
 ---
 
@@ -19,175 +19,151 @@ The primary risks are all implementation pitfalls, not design unknowns. The most
 
 ### Recommended Stack
 
-The entire implementation uses only Go's standard library on Go 1.25.5 (the project's existing go.mod version). No changes to `go.mod` are required. The core packages are `os/exec` for process lifecycle, `os/signal` for signal interception, `syscall` for Linux-specific process attributes and signal constants, `os` for file descriptor wiring and exit, and `flag` for CLI argument parsing.
+The Go backend requires no new `go.mod` entries. All new server-side packages are stdlib: `net/http`, `encoding/json`, `net/http/httptest`, `sync`, `time`, and `strings`. The only third-party dependency — `github.com/google/uuid v1.6.0` — is already present in `go.mod`. Go 1.22+ `ServeMux` supports method-scoped path patterns (`"POST /api/processes/{id}/start"`) and `r.PathValue("id")` for path parameter extraction; no external router is needed for 8 endpoints. External options (chi, gin) add nothing at this scale and must not be introduced. Do not use the experimental `encoding/json/v2` — it requires `GOEXPERIMENT=jsonv2` and is not covered by the Go 1 compatibility promise.
 
-The critical version-specific note: use `(*exec.ExitError).ExitCode()` (Go 1.12+) rather than the legacy `syscall.WaitStatus.ExitStatus()` approach. `signal.NotifyContext` (Go 1.16+) is available but not needed for v0's single-process, foreground execution model.
+For the frontend, `npm create vite@latest web -- --template react-ts` scaffolds a production-ready setup with React 19.2, TypeScript 5.9, and Vite 7. The Vite dev server proxy (`proxy: { '/api': 'http://localhost:8080' }`) eliminates CORS friction during development without modifying the Go server. No state management library (Redux, Zustand, Jotai), data-fetching library (TanStack Query, SWR, Axios), or streaming protocol (WebSocket, SSE) is needed — `useState` + `useEffect` + native `fetch` + `setInterval` covers all frontend requirements. Vite 7 requires Node.js 20+ (Node 18 is EOL).
 
 **Core technologies:**
-- `os/exec`: Spawn and manage the child process — `cmd.Start()` + `cmd.Wait()` split pattern is mandatory for signal interception.
-- `os/signal`: Intercept SIGINT and SIGTERM with a buffered channel — `signal.Notify(ch, ...)` where `ch` has capacity 1.
-- `syscall`: Linux-specific `SysProcAttr{Setpgid: true}` for process group isolation; signal constants; `WaitStatus` for signal-killed exit code emulation.
-- `os`: Wire `cmd.Stdout = os.Stdout`, `cmd.Stderr = os.Stderr`, `cmd.Stdin = os.Stdin` for zero-copy, unbuffered I/O passthrough; `os.Exit(code)` for exit code propagation.
-- `flag`: Parse `rtx run <cmd> [args...]` — one subcommand, no external CLI library needed.
-
-See `.planning/research/STACK.md` for the complete verified implementation loop and alternatives analysis.
+- `net/http` stdlib (Go 1.25.5): HTTP server and routing — no external router needed for 8 flat endpoints with Go 1.22+ method+path patterns
+- `encoding/json` stdlib: JSON request/response marshaling — use standard v1, not experimental v2
+- `net/http/httptest` stdlib: Handler unit testing — `NewRecorder()` + real Scheduler instance, no running port needed
+- `sync.RWMutex` stdlib: Scheduler concurrency — `RLock` for reads (list, status, logs), `Lock` for writes (add, start, stop)
+- `github.com/google/uuid` v1.6.0: Process ID generation — already in `go.mod`, no changes needed
+- React 19.2 + TypeScript 5.9 + Vite 7: Frontend — scaffold once, then native `fetch` for all API calls; no additional libraries
 
 ### Expected Features
 
-The v0 feature surface is deliberately narrow. All P1 features are required for correctness — missing any one of them means the process runner is broken, not incomplete. P2 features add polish but are not blocking.
+**Must have (table stakes):**
+- Process registration, start, stop, and status tracking — the foundation without which there is nothing to manage
+- Per-process state machine (idle/starting/running/stopping/stopped) — users need to know what changed
+- Log capture to in-memory ring buffer (1,000-line cap) — the log API endpoint has nothing to return without this
+- REST API — all 8 endpoints (list, create, get, delete, start, stop, logs, health) — the frontend depends on every one
+- CORS middleware — without this the React dev server on port 5173 cannot reach the Go API on port 8080 at all
+- `rtx serve` subcommand — entry point for the entire API and frontend layer
+- React: process list, create form, start/stop buttons, polling log viewer — minimum viable browser UI
+- Dependency ordering via topological sort with cycle detection — the primary differentiator; without cycle detection the scheduler can deadlock silently
+- Restart policies (never/always/on-failure) with exponential backoff — the second differentiator, configurable per process
 
-**Must have (table stakes / P1):**
-- Process spawning via `cmd.Start()` (not `cmd.Run()`) — required for concurrent signal forwarding
-- PID display on spawn — `[rtx] spawned PID %d` to stderr immediately after Start()
-- Real-time stdout/stderr passthrough via direct `cmd.Stdout = os.Stdout` assignment — unbuffered, race-free
-- SIGINT + SIGTERM interception and forwarding to child process
-- Graceful shutdown: forward signal, block on `cmd.Wait()`, exit with child's code
-- Zombie prevention: `cmd.Wait()` called on every code path after a successful `cmd.Start()`
-- Exit code capture and propagation: `*exec.ExitError.ExitCode()` → `os.Exit(code)`
-- "Command not found" handling: detect `exec.ErrNotFound`, emit clear message, exit 127
-- Minimal logging to stderr: PID, signal received, exit code
+**Should have (competitive):**
+- Per-process restart counter surfaced in API response and UI — makes failure patterns visible
+- React process list auto-refresh (poll `/api/processes` on same 2-second interval as log polling) — without this the process list goes stale after state changes
+- React log viewer polling disabled for stopped processes — avoids unnecessary network traffic
+- Health check endpoint (`GET /api/health`) — enables external monitoring and load balancer checks
+- Graceful shutdown: `rtx serve` sends SIGTERM to all managed processes before exiting — prevents orphaned children
 
-**Should have (competitive / P2):**
-- Signal-killed exit code emulation: `128 + signal_number` (e.g., 130 for SIGINT) to match shell behavior
-- Process group isolation: `Setpgid: true` + explicit signal forwarding for clean interposition
-- Unit tests for exit code propagation, zombie prevention, signal routing
-
-**Defer (v1+):**
-- Restart policies — requires understanding of real failure patterns first
-- Multi-process support — dependency graph design needed
-- Config file (YAML/TOML) — format and schema decisions not ready
-- Timeout / watchdog — graceful kill sequence design needed
-- Daemon mode — PID file, log redirect, double-fork out of scope
-
-The closest analog is `tini`, which does exactly what v0 targets: spawn one child, forward signals, reap zombies, propagate exit code. rtx v0 deliberately avoids everything `supervisord` adds (config files, restart policies, web UI, multi-process).
-
-See `.planning/research/FEATURES.md` for the full feature dependency graph and competitor analysis.
+**Defer (v2+):**
+- Config file loading (YAML/TOML) — requires format, schema, and validation design
+- State persistence to disk — requires SQLite or JSON file with corruption handling
+- WebSocket/SSE log streaming — explicitly out of scope per PROJECT.md
+- Interactive process console (stdin forwarding) — requires terminal emulation
+- Process metrics (CPU, memory) — requires `/proc` parsing on Linux
+- Multi-user auth — requires session management and token refresh
 
 ### Architecture Approach
 
-The architecture is two-layer. `cmd/rtx/main.go` handles argument parsing and `os.Exit()`. `internal/process/runner.go` contains all process lifecycle logic (spawn, stream, signal, wait, exit code). These packages share no state and have no coupling to the existing Docker orchestration packages (`internal/worker/`, `internal/core/`, `internal/queue/`). The boundary is enforced by design: the process runner is a standalone, self-contained unit.
+The architecture is a strictly layered single binary: React static files (served by the Go binary in production) → Go REST API (`internal/api/` — thin adapter) → Scheduler (`internal/scheduler/` — all business logic) → OS process layer (exec.Cmd). The scheduler is completely decoupled from the API — no import of `internal/api/` and no import of `internal/process/`. HTTP handlers do exactly three things: decode request body, call a scheduler method, encode the response. All process lifecycle logic — exec.Cmd setup, Setpgid, doneCh goroutine, log buffer assignment, restart scheduling — lives exclusively in the scheduler. The codebase must be cleaned before any new code is written: 10+ legacy Docker packages must be deleted to restore `go build ./...`.
 
 **Major components:**
-1. `cmd/rtx/main.go` (CLI Layer) — Parse `rtx run <cmd> [args...]`, validate args, delegate to `process.Run()`, call `os.Exit()` with returned code
-2. `internal/process/runner.go` (Executor + Signal Handler + Output Streamer) — `exec.Command` lifecycle, `signal.Notify` goroutine loop, direct fd wiring, exit code extraction
-3. OS Process Layer — child process inherits parent's stdout/stderr file descriptors; signals forwarded via `cmd.Process.Signal(sig)`
-
-Build order is forced by the dependency graph: `internal/process/` first (no external deps), `cmd/rtx/main.go` second (depends on process package only), tests third (alongside each component). The project adds a third binary alongside `bin/api` and `bin/worker`.
-
-See `.planning/research/ARCHITECTURE.md` for the full data flow diagram, component boundary table, and anti-pattern analysis.
+1. `internal/scheduler/` — owns all multi-process state; `sync.RWMutex`-protected `map[string]*ManagedProcess`; dependency graph resolution; restart policies; per-process log ring buffers
+2. `internal/api/` — Go 1.22+ `net/http` handlers (thin adapters); CORS middleware; JSON encode/decode; route registration via `ServeMux`
+3. `web/` (React) — process list, create form, start/stop controls, polling log viewer; built separately via Vite; served as static files by the Go binary in production
+4. `cmd/rtx/main.go` — extended with `serve` subcommand; runs `http.ListenAndServe` in a goroutine; signal handling and graceful `srv.Shutdown()` in the main goroutine
 
 ### Critical Pitfalls
 
-All 7 pitfalls documented in PITFALLS.md are known failure modes with verified prevention strategies. The top 5 by severity:
+1. **Calling `process.Run()` from the scheduler** — it is blocking, owns signal handling, and forfeits all control (cannot call Signal(), cannot capture logs to a buffer). The scheduler must reimplement the non-blocking patterns from `runner.go` directly using `cmd.Start()` + doneCh goroutine, and must never call `process.Run()`.
 
-1. **Calling `cmd.Run()` instead of `cmd.Start()` + `cmd.Wait()`** — `Run()` blocks and makes signal forwarding impossible. Prevention: always use the Start/Wait split pattern with a signal goroutine between them.
+2. **Log buffer without its own mutex** — `cmd.Start()` spawns internal goroutines to copy stdout and stderr; they write to the log buffer concurrently with HTTP handler goroutines reading it. The `logBuffer` struct needs its own `sync.Mutex` independent of the scheduler's `RWMutex`. `go test -race` detects this immediately.
 
-2. **Missing `cmd.Wait()` on any code path after `cmd.Start()`** — Creates zombie processes that persist in the process table. Prevention: structure the runner so `cmd.Wait()` is called unconditionally; prefer a goroutine sending to `doneCh` and a select that always drains `doneCh` before returning.
+3. **Holding the scheduler write lock during `cmd.Start()`** — `cmd.Start()` involves a fork syscall; holding the lock during it serializes all API operations and risks deadlock if a Wait goroutine tries to acquire the same lock before `Start()` returns. Use a two-phase pattern: acquire lock to validate state, release before `cmd.Start()`, re-acquire to write pid/state.
 
-3. **Unbuffered signal channel** — `make(chan os.Signal)` (capacity 0) silently drops signals; `signal.Notify` does a non-blocking send. Prevention: `make(chan os.Signal, 1)`. `go vet` catches this — run it.
+4. **Restart goroutine not cancellable** — `time.Sleep(delay)` in a goroutine with no cancellation means `Stop()` cannot abort a pending backoff restart; the process appears to ignore stop commands. Each `ManagedProcess` needs a `context.CancelFunc`; `Stop()` calls it before sending SIGTERM.
 
-4. **Exit code swallowed — always returning 0 or 1** — Type-asserting `cmd.Wait()` error as generic `error` loses the real exit code. Prevention: `errors.As(err, &exitErr)` then `exitErr.ExitCode()`. Never `os.Exit(1)` on a non-nil `cmd.Wait()` error without checking first.
-
-5. **Process group conflict — child receives signal twice or zero times** — Default process group: kernel delivers Ctrl+C to both runner and child simultaneously; `cmd.Process.Signal(sig)` then hits an already-dead process. Setpgid: child never gets the signal unless explicitly forwarded. Prevention: decide the model upfront. For rtx (transparent forwarder without Setpgid), swallow `os.ErrProcessDone` from `Signal()`. For rtx with `Setpgid: true`, explicit forwarding is mandatory.
-
-Secondary pitfalls to address at implementation time:
-- `os.Exit()` skips deferred functions — use the inner-function-returns-int pattern in `main()`
-- `cmd.Wait()` can block forever if a grandchild inherits the pipe — avoided entirely by using direct `*os.File` assignment instead of `StdoutPipe()`
-
-See `.planning/research/PITFALLS.md` for the complete pitfall-to-phase mapping and "Looks Done But Isn't" checklist.
+5. **`http.ListenAndServe` blocking the main goroutine** — signal handling code placed after `ListenAndServe` is never reached; Ctrl+C kills the server hard, leaving all managed processes as orphans. Run `ListenAndServe` in a goroutine; handle signals in main; call `srv.Shutdown()` with a timeout context.
 
 ---
 
 ## Implications for Roadmap
 
-Based on research, the component dependency chain dictates a clear build order. There are no ambiguous sequencing decisions — the architecture forces the order. Three phases are sufficient for v0.
+The dependency graph in ARCHITECTURE.md, feature priorities in FEATURES.md, and pitfall phase mappings in PITFALLS.md converge on a clear 8-phase structure. There are no ambiguous sequencing decisions — architecture forces the order.
 
-### Phase 1: Process Execution Foundation
+### Phase 1: Codebase Cleanup
+**Rationale:** Hard prerequisite for everything else. The existing `internal/api/handlers.go` references an undefined type and the build fails. No new code can be written or tested until `go build ./...` passes on the clean v1.0 baseline. Attempting to build on a broken foundation causes confusion throughout all later phases.
+**Delivers:** Clean, compiling codebase containing only `cmd/rtx/main.go`, `internal/process/runner.go`, and their tests. All 10+ legacy Docker packages deleted.
+**Addresses:** "Codebase cleanup" P1 prerequisite from FEATURES.md (unblocks everything).
+**Avoids:** Build failures that block compilation of any new package.
+**Research flag:** No research needed — this is mechanical deletion of identified file paths.
 
-**Rationale:** `cmd/rtx/main.go` cannot be built until `internal/process/` exists. The output streamer and exit code extractor are prerequisites for signal handling (you need a running process before you can forward signals to it). This phase proves the basic process lifecycle is correct before adding signal complexity.
+### Phase 2: Scheduler — Data Structures and Log Buffer
+**Rationale:** All scheduler functionality depends on the `ManagedProcess`, `ProcessDef`, `State` enum, and `logBuffer` types existing first. The log buffer's mutex design must be correct from the start — retrofitting it after start/stop logic is built creates a data race that is harder to isolate and debug.
+**Delivers:** `internal/scheduler/process.go` with `ManagedProcess`, `ProcessDef`, `State`, and a mutex-safe `logBuffer` implementing `io.Writer`. Unit tests verifying ring buffer eviction at capacity and race-safe concurrent writes via `go test -race`.
+**Implements:** Architecture Pattern 1 (Scheduler as In-Memory Registry) and Pattern 2 (Logs via io.Writer to Ring Buffer).
+**Avoids:** Pitfalls 3 (logBuffer data race), 4 (unbounded log memory).
+**Research flag:** No research needed — patterns are fully specified with working code examples in ARCHITECTURE.md and PITFALLS.md.
 
-**Delivers:** A working `rtx run <cmd> [args...]` binary that spawns a child, streams I/O in real time, captures exit code, propagates it to the shell, and prevents zombies. No signal handling yet — Ctrl+C kills both parent and child via the kernel (default behavior), which is acceptable for this phase.
+### Phase 3: Scheduler — Start, Stop, and Basic Lifecycle
+**Rationale:** With types established, implement the core lifecycle without the complexity of dependency ordering or restart policies. Verifying start/stop/status with simple test commands (`sleep 5`, `true`, `false`) provides a stable, race-free foundation before layering on more complex features.
+**Delivers:** `internal/scheduler/scheduler.go` with `Add`, `Start`, `Stop`, `Status`, `Logs` methods. `go test -race ./internal/scheduler/...` passing. Zombie prevention verified (Wait goroutine for every started process).
+**Implements:** Architecture build order Step 3; reuses non-blocking process patterns from `runner.go`.
+**Avoids:** Pitfalls 1 (calling `process.Run()`), 2 (direct fd assignment — logs go to ring buffer), 5 (lock held during `cmd.Start()`).
+**Research flag:** No research needed — patterns are fully specified with code in ARCHITECTURE.md and PITFALLS.md.
 
-**Addresses (from FEATURES.md P1):**
-- Process spawning via `cmd.Start()`
-- Real-time stdout/stderr passthrough (direct fd assignment)
-- Zombie prevention (`cmd.Wait()` on all paths)
-- Exit code capture and propagation
-- "Command not found" error handling (exit 127)
-- PID display and minimal logging
-- CLI entry point (`rtx run <cmd> [args...]`)
+### Phase 4: Scheduler — Dependency Ordering
+**Rationale:** Dependency ordering is Runtime X v1.1's primary differentiator. It enhances `Start()` and must be built on a working start/stop foundation. Cycle detection is mandatory — without it, circular dependencies cause silent hangs that are difficult to debug and result in unresponsive HTTP endpoints.
+**Delivers:** `internal/scheduler/deps.go` with `topoSort` using `visited` + `inStack` DFS. `Start()` resolves and starts dependencies in order. Tests covering: linear chain, diamond dependency, missing dependency error, and cycle detection returning an error immediately.
+**Implements:** Architecture Pattern 3 (Dependency Ordering via Topological Sort).
+**Avoids:** Pitfall 6 (dependency cycle not detected — silent deadlock on `POST /start`).
+**Research flag:** No research needed — algorithm is fully specified with code in PITFALLS.md and ARCHITECTURE.md.
 
-**Avoids (from PITFALLS.md):**
-- `cmd.Run()` anti-pattern (use Start/Wait split from the start)
-- Missing `cmd.Wait()` on error paths
-- `os.Exit()` skipping defer (inner-function-returns-int pattern in main)
-- `cmd.Wait()` blocking on grandchild pipe (direct `*os.File` assignment from day one)
-- Exit code swallowing (ExitError type assertion built in from the start)
+### Phase 5: Scheduler — Restart Policies with Exponential Backoff
+**Rationale:** Restart policies are the second differentiator. They hook into the existing exit goroutine from Phase 3. Both the goroutine cancellation pattern (for Stop() during backoff) and the integer overflow cap must be implemented together — they interact and are easy to miss independently.
+**Delivers:** `internal/scheduler/restart.go` with `RestartPolicy` struct, `scheduleRestart()`, `computeBackoff()`. `ManagedProcess` gets `restartCtx`/`restartCancel` fields. Tests for: `never` policy (no restart), `always` policy (restarts after exit 0), `on-failure` policy (restarts after exit 1, not after exit 0), stop-during-backoff cancellation, and overflow cap at 30 shifts.
+**Implements:** Architecture Pattern 4 (Restart Policy with Exponential Backoff).
+**Avoids:** Pitfalls 7 (restart goroutine not cancellable by Stop()), 8 (backoff integer overflow after many restarts).
+**Research flag:** No research needed — both patterns are fully specified with working code in PITFALLS.md.
 
-**Research flag:** Standard patterns — no deeper research needed. The canonical implementation is fully specified in STACK.md (Key Implementation Pattern section).
+### Phase 6: REST API — HTTP Server, Handlers, and CORS
+**Rationale:** The API layer depends on a complete scheduler. With all scheduler features in place, the API is a thin adapter — decode, call scheduler method, encode. CORS must be implemented in this phase because it is required for any browser-based integration testing. Handlers must use `202 Accepted` for start/stop since process lifecycle is asynchronous.
+**Delivers:** `internal/api/server.go`, `handlers.go`, `middleware.go`. All 8 endpoints registered and tested with `httptest.NewRecorder()`. CORS preflight returning 204 verified with `curl -X OPTIONS -v`. Error responses mapped from scheduler errors to correct HTTP status codes (404, 409, 400).
+**Implements:** Architecture Pattern 5 (REST API as Thin Adapter) and the full API endpoint contract from ARCHITECTURE.md.
+**Avoids:** Pitfalls 9 (HTTP handler blocking on process start — use `202 Accepted`), 10 (missing CORS middleware blocks all browser requests).
+**Research flag:** No research needed — all patterns documented with code examples in ARCHITECTURE.md and STACK.md.
 
----
+### Phase 7: CLI — `rtx serve` Subcommand and Graceful Shutdown
+**Rationale:** Wires everything together into a runnable binary. The signal handling pattern is critical here — `ListenAndServe` must run in a goroutine; the main goroutine handles signals; `srv.Shutdown()` is called with a timeout context; managed processes receive SIGTERM before the server exits to prevent orphaned children.
+**Delivers:** Extended `cmd/rtx/main.go` with `serve [--addr :8080]` subcommand. End-to-end verification via curl: all 8 endpoints respond correctly. Ctrl+C triggers graceful shutdown within 10 seconds and `ps aux` shows no orphaned managed processes.
+**Avoids:** Pitfall 12 (ListenAndServe blocking signal handler — managed processes become orphans on hard kill).
+**Research flag:** No research needed — the `http.Server` goroutine + signal handling + Shutdown pattern is fully specified with code in PITFALLS.md.
 
-### Phase 2: Signal Forwarding and Graceful Shutdown
-
-**Rationale:** Signal handling depends on Phase 1 producing a running `cmd.Process`. The signal goroutine pattern is independent enough to layer on top of the Phase 1 foundation without refactoring. The process group isolation decision (Setpgid vs. no Setpgid) must be made before coding this phase.
-
-**Delivers:** Ctrl+C and SIGTERM are intercepted by `rtx`, forwarded to the child, and `rtx` waits for the child to finish its cleanup before exiting. The log line "received SIGINT, forwarding to PID X" appears before child exit. `rtx` exits with the child's exit code in all signal scenarios.
-
-**Addresses (from FEATURES.md P1/P2):**
-- SIGINT + SIGTERM interception and forwarding
-- Graceful shutdown sequence (forward → wait → exit with child's code)
-- Process group isolation decision (Setpgid: true recommended for observable logging)
-
-**Avoids (from PITFALLS.md):**
-- Unbuffered signal channel (use `make(chan os.Signal, 1)`)
-- Signal not forwarded to child (explicit `cmd.Process.Signal(sig)`)
-- Process group conflict (deliberate design decision: Setpgid: true + explicit forwarding)
-- Signal forwarding to already-dead process (swallow `os.ErrProcessDone`)
-
-**Design decision required before coding:** Whether to use `Setpgid: true` (recommended by STACK.md for observable behavior) or rely on default process group inheritance. STACK.md recommends Setpgid: true for v0. If chosen, explicit signal forwarding is mandatory — the OS no longer auto-delivers Ctrl+C to the child.
-
-**Research flag:** Standard patterns — the signal goroutine loop and Setpgid decision are fully specified in STACK.md and ARCHITECTURE.md. No additional research needed.
-
----
-
-### Phase 3: Polish, Tests, and Validation
-
-**Rationale:** Once Phase 1 and Phase 2 are complete, the core correctness proof is done. Phase 3 adds the "Looks Done But Isn't" verification, signal-killed exit code emulation (128+N), and test coverage that makes the runner trustworthy for production use.
-
-**Delivers:** A production-ready `rtx` binary with verified behavior across all edge cases, unit tests that serve as regression guards, and documented manual test results for the PITFALLS.md checklist.
-
-**Addresses (from FEATURES.md P2):**
-- Signal-killed exit code emulation (128 + signal_number)
-- Unit tests: exit code propagation, zombie prevention, signal routing
-- Manual validation against "Looks Done But Isn't" checklist
-
-**Test targets:**
-- `rtx run false` → `echo $?` returns exactly `1`
-- `rtx run sh -c 'exit 42'` → returns exactly `42`
-- `rtx run sleep 100` + Ctrl+C → child exits, `ps aux | grep Z` shows no zombie, runner exits with correct code
-- `rtx run yes` → output appears line-by-line (real-time, not buffered)
-- `rtx run nonexistent-command` → "command not found" message, exit 127
-
-**Research flag:** Standard patterns — test fixtures using `exec.Command("true")`, `exec.Command("false")`, `exec.Command("sleep", "10")` are specified in STACK.md. Signal-killed exit code emulation using `syscall.WaitStatus.Signaled()` is documented in FEATURES.md.
-
----
+### Phase 8: React Frontend
+**Rationale:** The frontend is the final consumer and depends on a fully functional API. The React app is scaffolded once with `npm create vite@latest web -- --template react-ts`. The Vite proxy handles CORS during development. The three components — ProcessList, ProcessForm, LogViewer — are built and tested against the real running API. Production build verification (Go binary serves `web/dist/`) is the final integration test.
+**Delivers:** `web/` directory with ProcessList (status badges + 2-second auto-refresh), ProcessForm (name, command, args, dependsOn, restartPolicy fields), start/stop buttons per process, LogViewer with 2-second polling + AbortController cleanup on unmount. Production build: `./bin/rtx serve` serves React and API at same origin without Vite.
+**Implements:** All React frontend MVP features from FEATURES.md.
+**Avoids:** Pitfall 11 (React polling without `useEffect` cleanup — memory leak and state updates on unmounted component).
+**Research flag:** React cleanup pattern and AbortController usage are fully specified with code in PITFALLS.md. No additional research needed.
 
 ### Phase Ordering Rationale
 
-- **Phase 1 before Phase 2** is forced by the dependency graph: signal forwarding requires `cmd.Process`, which only exists after `cmd.Start()` succeeds. The output streamer and zombie prevention must be in place first, or signal testing is unreliable.
-- **Phase 2 before Phase 3** is logical: you cannot validate signal behavior until the signal handler exists. The "Looks Done But Isn't" checklist tests features from both Phase 1 and Phase 2 together.
-- **No Phase requires redesign** from a previous Phase: each phase layers on top of the previous one. Phase 2 adds a goroutine and a select statement to Phase 1's Start/Wait loop. Phase 3 adds tests.
-- **This avoids the primary pitfall sequence:** building signal handling before proving basic lifecycle correctness (Phase 1) is a common source of compound bugs.
+- **Cleanup is a hard prerequisite:** The broken build blocks compilation of any new package. Nothing can proceed while `go build ./...` fails.
+- **Data structures before logic:** Types and the log buffer must exist before any lifecycle code is written; retrofitting the mutex after the fact creates racing bugs that are harder to isolate than if the mutex is designed in from the start.
+- **Basic lifecycle before advanced features:** Start/stop without dependencies or restart policies provides a testable race-free baseline; dependency ordering and restart policies are layered on top without requiring refactoring.
+- **Complete scheduler before API:** The API is a thin adapter — building it against an incomplete scheduler requires mocking that obscures real integration issues.
+- **API before frontend:** The React app calls real endpoints; testing against the actual API rather than a stub catches contract mismatches before they become UX bugs.
+- **Vite proxy is dev-only:** Production verification must confirm that the Go binary serves React static files correctly without Vite running — this is a required final check in Phase 8.
 
 ### Research Flags
 
-Phases with standard patterns (skip additional research):
-- **Phase 1:** Fully specified. The exact implementation is in STACK.md "Key Implementation Pattern." No design unknowns.
-- **Phase 2:** Fully specified. The signal goroutine pattern and Setpgid decision are documented in STACK.md "Stack Patterns by Variant" and ARCHITECTURE.md "Pattern 2."
-- **Phase 3:** Fully specified. Test fixtures and validation checklist are in PITFALLS.md.
+All 8 phases have sufficient coverage in the research files to proceed directly to implementation planning. Every critical pattern has working code examples in ARCHITECTURE.md, PITFALLS.md, or STACK.md.
 
-No phases require a `/gsd:research-phase` call. All research is complete and HIGH confidence.
+Phases with well-documented patterns — skip `/gsd:research-phase`:
+- **Phase 1 (Cleanup):** Mechanical deletion of identified file paths.
+- **Phase 2 (Data Structures):** Ring buffer design and logBuffer mutex — code examples in PITFALLS.md.
+- **Phase 3 (Start/Stop):** Non-blocking exec.Cmd + doneCh goroutine — code examples in ARCHITECTURE.md and PITFALLS.md.
+- **Phase 4 (Dependency Ordering):** DFS topological sort with visited/inStack — code examples in PITFALLS.md.
+- **Phase 5 (Restart Policies):** Context cancellation + backoff cap — code examples in PITFALLS.md.
+- **Phase 6 (REST API):** Go 1.22+ net/http, CORS middleware — code examples in STACK.md and ARCHITECTURE.md.
+- **Phase 7 (serve subcommand):** http.Server goroutine + signal handling + Shutdown — code examples in PITFALLS.md.
+- **Phase 8 (React Frontend):** React 19 + useEffect cleanup + AbortController — code examples in PITFALLS.md and STACK.md.
 
 ---
 
@@ -195,50 +171,56 @@ No phases require a `/gsd:research-phase` call. All research is complete and HIG
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Every recommendation traces to official pkg.go.dev documentation. No external dependencies means no version compatibility risk. The canonical implementation loop is verified against Go 1.25.5 release notes. |
-| Features | HIGH | Feature set grounded in os/exec official docs, tini/dumb-init source analysis, and Go stdlib behavior. The tini analog establishes clear table-stakes definition. |
-| Architecture | HIGH | Based on official Go stdlib docs + direct read of the Runtime-X codebase (internal/worker/runner.go, .planning/codebase/ARCHITECTURE.md). Package boundaries match existing project conventions exactly. |
-| Pitfalls | HIGH | Primary sources include official Go issue tracker entries (tracked bugs, not blog speculation). `go vet` catches the signal channel pitfall automatically. All 7 pitfalls have verified prevention strategies. |
+| Stack | HIGH | All Go recommendations verified against official stdlib docs (pkg.go.dev) and Go 1.25 release notes. React/Vite/TypeScript versions verified against official release pages. No technology decision rests solely on community sources. |
+| Features | HIGH | Grounded in direct codebase analysis of `runner.go` plus competitor analysis of supervisord, PM2, and overmind. Table stakes reflect what reference tools actually implement. Differentiators (dependency ordering, REST API, backoff) are verified absent from all three reference tools. |
+| Architecture | HIGH | Based on existing codebase analysis plus official Go stdlib docs. Component boundaries are explicit, verified against the no-circular-dependency constraint, and illustrated with a full system diagram. Code examples synthesized from real Go stdlib patterns. |
+| Pitfalls | HIGH | Every pitfall maps to a specific build phase, has a prevention code example, has warning signs for detection, and has a recovery cost estimate. Critical pitfalls (logBuffer race, lock-during-Start, restart goroutine leak) are derived from Go stdlib behavior documented in official sources and golang/go issue tracker. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Process group decision:** STACK.md recommends `Setpgid: true` for v0. PITFALLS.md suggests that for a transparent forwarder, NOT using Setpgid may be simpler (child receives signal from kernel + from runner, but the runner should swallow `os.ErrProcessDone`). Both approaches are documented. Implementer must choose before coding Phase 2. Recommendation: start with `Setpgid: true` as specified in STACK.md for observable logging behavior; revisit if testing reveals issues.
+- **Production static file serving:** The research specifies that the Go binary serves `web/dist/` in production but does not specify whether to use `//go:embed` (embeds files into the binary) or `http.FileServer` (serves from disk). Decision needed during Phase 7/8 planning. Recommendation: use `http.FileServer(http.Dir("web/dist"))` for simplicity in v1.1; embed is better for distribution as a single self-contained binary.
 
-- **Signal-killed exit code emulation (Phase 3):** `(*exec.ExitError).ExitCode()` returns -1 when the process was killed by a signal. Emitting `128 + signal_number` requires inspecting `cmd.ProcessState.Sys().(syscall.WaitStatus)`. This is a known P2 feature, not a gap in understanding — it needs implementation and testing but no additional research.
+- **Process `Remove()` method guard:** PITFALLS.md notes that deleting a running process should return `409 Conflict`, and ARCHITECTURE.md lists `DELETE /api/processes/{id}` in the endpoint contract. However, neither document specifies a `Remove()` method signature on the scheduler. This method needs to be designed (checking state before removal) and must be included in Phase 3 or Phase 6 implementation planning.
 
-- **Windows support:** Out of scope for v0. `SIGINT` is not sendable to other processes on Windows (Go issue #6720). Linux is the declared first-class target. Build tags should gate the `syscall.SysProcAttr{Setpgid: true}` field assignment if cross-platform support is added post-v0.
+- **Restart policy form UX:** The `ProcessForm` React component must include fields for `restartPolicy.mode` (dropdown: never/always/on-failure), `restartPolicy.initialWait` (duration input), `restartPolicy.maxWait` (duration input), and `restartPolicy.maxRestarts` (number input). The UX for duration fields is not specified in the research — implementer must decide on input format (seconds as integer, or string like "5s") and ensure it matches the JSON API body format accepted by `POST /api/processes`.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `https://pkg.go.dev/os/exec` — Cmd struct, Start/Wait lifecycle, signal handling, zombie prevention, ExitError
-- `https://pkg.go.dev/os/signal` — Notify, Stop, NotifyContext signatures and buffered channel requirement
-- `https://pkg.go.dev/os#Process` — Process.Signal, ProcessState.ExitCode
-- `https://pkg.go.dev/syscall` — SysProcAttr, WaitStatus, signal constants
-- `https://pkg.go.dev/flag` — Args(), FlagSet for subcommands
-- `https://go.dev/doc/go1.25` — Confirmed no breaking changes to os/exec, os/signal, syscall
-- Go issue #52580 — cmd.Wait must be called (zombie prevention mandate)
-- Go issue #45604 — go vet catches unbuffered os.Signal channel
-- Go issue #6720, #28498 — SIGINT not sendable on Windows (Linux-first rationale)
-- `https://github.com/krallin/tini/blob/master/README.md` — Defines minimal process runner feature set (the tini analog)
-- Runtime-X codebase direct analysis — internal/worker/runner.go, .planning/codebase/ARCHITECTURE.md
+- `https://pkg.go.dev/net/http` — ServeMux routing, PathValue, middleware, ErrServerClosed
+- `https://go.dev/blog/routing-enhancements` — Go 1.22 method+path pattern confirmation
+- `https://go.dev/doc/go1.25` — json/v2 experimental status, compatibility warning
+- `https://go.dev/blog/jsonv2-exp` — json/v2 explicitly not under Go 1 compatibility promise
+- `https://pkg.go.dev/net/http/httptest` — NewRecorder, NewRequest for handler testing
+- `https://pkg.go.dev/os/exec` — Cmd.Start, Cmd.Wait, internal copy goroutines
+- `https://pkg.go.dev/sync` — RWMutex, Mutex semantics
+- `https://pkg.go.dev/github.com/google/uuid` — uuid.NewString() for UUID v4
+- `https://vite.dev/releases` — Vite 7.3.1 current stable confirmed
+- `https://react.dev/versions` — React 19.2.4 current stable confirmed
+- `https://devblogs.microsoft.com/typescript/` — TypeScript 5.9 stable, 6.0 in beta
+- `https://go.dev/doc/articles/race_detector` — race detection methodology
+- `https://github.com/golang/go/issues/19804` — concurrent copy goroutines from cmd.Start(), data race with shared writer
+- `https://react.dev/reference/react/useEffect` — official cleanup pattern for intervals
+- Runtime-X `go.mod` — uuid v1.6.0 already present, no new Go dependencies needed
+- Runtime-X `internal/process/runner.go` — v1.0 patterns being reused and adapted in scheduler
 
 ### Secondary (MEDIUM confidence)
-- `https://www.dolthub.com/blog/2022-11-28-go-os-exec-patterns/` — Process group isolation, signal handling, pipe lifecycle patterns
-- `https://victoriametrics.com/blog/go-graceful-shutdown/` — Graceful shutdown patterns, NotifyContext tradeoffs
-- `https://mezhenskyi.dev/posts/go-linux-processes/` — Linux process management, zombie prevention, Setpgid
-- `https://engineeringblog.yelp.com/2016/01/dumb-init-an-init-for-docker.html` — Signal forwarding and zombie reaping patterns (dumb-init comparison)
-- `https://kevin.burke.dev/kevin/proxying-to-a-subcommand-with-go/` — Start/Wait/signal-goroutine pattern, syscall.Exec alternative
-- `https://github.com/Netflix/signal-wrapper/blob/master/main.go` — Production signal forwarding reference implementation
-
-### Tertiary (LOW confidence)
-- `https://medium.com/@AlexanderObregon/signal-handling-in-go-applications-b96eb61ecb69` — Signal handling overview (single source, not official)
+- `https://supervisord.org/introduction.html` — table stakes definition for process supervisors
+- `https://pm2.keymetrics.io/docs/usage/process-management/` — PM2 feature set comparison
+- `https://github.com/DarthSim/overmind` — Procfile-based manager; no REST API, no dependency ordering
+- `https://michael.stapelberg.ch/posts/2024-01-17-systemd-indefinite-service-restarts/` — restart policy parameter design
+- `https://betterstack.com/community/guides/monitoring/exponential-backoff/` — initialDelay, factor, maxRetries, maxDelay
+- `https://www.alexedwards.net/blog/which-go-router-should-i-use` — net/http 1.22+ as recommended starting point for flat APIs
+- `https://dev.to/mokiat/proper-http-shutdown-in-go-3fji` — ListenAndServe goroutine + Shutdown pattern
+- `https://refine.dev/blog/useeffect-cleanup/` — React polling cleanup pattern with AbortController
+- `https://github.com/cenkalti/backoff` — backoff cap and overflow prevention patterns
+- `https://corsfix.com/blog/common-cors-mistakes` — OPTIONS preflight requirements, wildcard+credentials risks
+- `https://www.dbi-services.com/blog/avoid-cors-requests-in-development-mode-with-vite/` — Vite proxy dev-only limitation
 
 ---
-
-*Research completed: 2026-02-27*
+*Research completed: 2026-03-01*
 *Ready for roadmap: yes*
