@@ -22,7 +22,6 @@ tmp/
 .DS_Store
 Thumbs.db
 
-# Generated Dockerfiles (keep sample)
-docker_files/
-docker_files/go.dockerfile
-
+# Compiled binaries
+rtx
+bin/

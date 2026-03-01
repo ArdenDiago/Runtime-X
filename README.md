@@ -1,126 +1,51 @@
-# Runtime X
+# Runtime X (rtx)
 
-> A backend-first runtime system for scheduling, executing, and tracking jobs with reliability and clear service boundaries.
+A process manager for running, monitoring, and scheduling processes reliably.
 
-Runtime X is a collaborative Go-based project focused on system design, service orchestration, and execution reliability.  
-It is intentionally designed as a backend-first system, where the UI acts only as a control and observability layer.
+## What Is rtx
 
----
+Runtime X (rtx) is a Go-based process manager focused on correct process lifecycle management — no zombies, no orphans, exact exit codes, and clean signal forwarding.
 
-## 🧠 Project Philosophy
+## Versions
 
-Runtime X follows a simple but strict philosophy:
+### v1.0 — Single-Process CLI Runner (complete)
 
-Build the system first.  
-Observe it second.  
-Beautify it last.
+A CLI tool that runs a single process and handles it correctly.
 
-- The backend is the source of truth
-- Services are independent and explicit
-- The UI contains no business logic
-- Every job can be managed via APIs alone
+```
+rtx run <command> [args...]
+```
 
-If the UI is removed and the system still works via `curl`, the design is correct.
+Features:
+- Real-time stdout/stderr streaming via direct fd inheritance
+- SIGINT/SIGTERM forwarded to the child process
+- Exact POSIX exit code returned (128+N for signal-killed processes)
 
----
+### v1.1 — Multi-Process Scheduler (in progress)
 
-## 🎯 What Problem Does Runtime X Solve?
+A scheduler that manages multiple named processes with a REST API and web UI.
 
-Runtime X provides a structured way to:
-- Accept jobs
-- Schedule execution
-- Execute tasks
-- Track execution state
-- Retry failed jobs
+Planned features:
+- Named process definitions with restart policies
+- REST API for process management
+- Web UI for status and control
+- Polling-based status updates
 
-The focus is on reliability, clarity, and extensibility — not UI complexity.
+## Build
 
----
+```
+go build ./cmd/rtx
+```
 
-## 🧩 Core Concepts
+## Test
 
-### Job Lifecycle
+```
+go test ./...
+```
 
-Each job moves through clearly defined states:
+## Project Structure
 
-PENDING → RUNNING → COMPLETED  
-PENDING → RUNNING → FAILED → RETRYING → RUNNING
-
-- All state transitions are explicit
-- Failures are detected and recorded
-- Retries follow defined policies
-
----
-
-## 🏗️ Architecture Overview
-
-Runtime X is built using independent services:
-
-| Service   | Responsibility |
-|----------|----------------|
-| Scheduler | Accepts jobs, tracks state, decides retries |
-| Executor  | Executes jobs and reports results |
-| Gateway   | Exposes APIs and routes requests |
-| UI        | Displays state and triggers actions |
-
-Services communicate via HTTP APIs with clear contracts.
-
----
-
-## ⚙️ Services Description
-
-### Scheduler Service
-- Accepts job submissions
-- Maintains job state
-- Manages retry logic
-- Acts as the system’s control plane
-
-### Executor Service
-- Executes assigned jobs
-- Reports success or failure
-- Handles execution errors
-- Contains no scheduling logic
-
-### Gateway Service
-- Entry point for UI and external clients
-- Routes requests to internal services
-- Aggregates responses when needed
-
-### UI (Minimal)
-- Job creation form
-- Job status table
-- Job detail view
-- System health indicators
-
-The UI is intentionally minimal and optional.
-
----
-
-## 🧪 Failure Handling & Reliability
-
-In Runtime X (v1):
-- A failure means execution returned an error or exited unexpectedly
-- Failed jobs are tracked explicitly
-- Retry policies define:
-  - Maximum retries
-  - Retry conditions
-  - Final failure state
-
-Runtime X does not act as a full OS or container supervisor in v1.  
-Those capabilities are intentionally deferred.
-
----
-
-## 🛠️ Tech Stack
-
-- Language: Go
-- Communication: HTTP (REST)
-- Containerization: Docker
-- Local orchestration: Docker Compose
-- CI: GitHub Actions
-- UI: Minimal React-based interface (optional)
-
----
-
-## 📁 Repository Structure
-
+```
+cmd/rtx/             CLI entry point
+internal/process/    v1.0 process runner
+```
