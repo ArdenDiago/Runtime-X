@@ -53,7 +53,10 @@ Plans:
   2. A process's log buffer captures output and evicts oldest lines when the ring is full
   3. `go test -race ./internal/scheduler/...` passes with concurrent log writes and reads — no data races detected
   4. Retrieved log lines from the ring buffer reflect the most recent output, not overwritten history
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — TDD: Log buffer ring buffer (mutex-safe, evict-oldest, concurrent read/write)
+- [ ] 05-02-PLAN.md — TDD: Scheduler types and registration (ProcessDef, State FSM, Register/Remove/Get/List/Logs)
 
 ### Phase 6: Scheduler Start, Stop, and Lifecycle
 **Goal**: Users can start and stop registered processes — the scheduler tracks PID and status transitions correctly with zombie prevention and race-free state management
@@ -135,7 +138,7 @@ Plans:
 | 2. Signal Forwarding | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 3. Tests and Validation | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 4. Codebase Cleanup | v1.1 | Complete    | 2026-03-01 | 2026-03-01 |
-| 5. Scheduler Data Structures and Log Buffer | v1.1 | 0/TBD | Not started | - |
+| 5. Scheduler Data Structures and Log Buffer | v1.1 | 0/2 | Planned | - |
 | 6. Scheduler Start, Stop, and Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 7. Dependency Ordering | v1.1 | 0/TBD | Not started | - |
 | 8. Restart Policies | v1.1 | 0/TBD | Not started | - |
