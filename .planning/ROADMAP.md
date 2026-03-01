@@ -20,7 +20,7 @@
 
 **Milestone Goal:** Transform rtx from a single-process CLI runner into a multi-process manager with a web UI for full browser-based process management.
 
-- [ ] **Phase 4: Codebase Cleanup** — Remove legacy Docker/API code and restore a clean, compiling baseline
+- [ ] **Phase 4: Codebase Cleanup** (1 plan) — Remove legacy Docker/API code and restore a clean, compiling baseline
 - [ ] **Phase 5: Scheduler Data Structures and Log Buffer** — Define core types and mutex-safe ring buffer that all later scheduler logic depends on
 - [ ] **Phase 6: Scheduler Start, Stop, and Lifecycle** — Implement the core process lifecycle methods on a race-free foundation
 - [ ] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator
@@ -40,7 +40,9 @@
   2. `go test ./...` exits 0 — existing v1.0 runner tests still pass
   3. No files remain under `cmd/api/`, `internal/api/`, or `internal/worker/`
   4. Project directory structure reflects the scheduler + API + frontend layout for v1.1
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 04-01-PLAN.md — Remove legacy code, update config, verify clean build
 
 ### Phase 5: Scheduler Data Structures and Log Buffer
 **Goal**: The `ManagedProcess`, `ProcessDef`, `State`, and `logBuffer` types exist with a mutex-safe ring buffer that can be written from goroutines and read from HTTP handlers concurrently without races
@@ -132,7 +134,7 @@
 | 1. Process Foundation | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 2. Signal Forwarding | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 3. Tests and Validation | v1.0 | 2/2 | Complete | 2026-02-28 |
-| 4. Codebase Cleanup | v1.1 | 0/TBD | Not started | - |
+| 4. Codebase Cleanup | v1.1 | 0/1 | Planned | - |
 | 5. Scheduler Data Structures and Log Buffer | v1.1 | 0/TBD | Not started | - |
 | 6. Scheduler Start, Stop, and Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 7. Dependency Ordering | v1.1 | 0/TBD | Not started | - |
