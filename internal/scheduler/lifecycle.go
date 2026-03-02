@@ -45,6 +45,14 @@ func (s *Scheduler) Start(name string) error {
 		return fmt.Errorf("cannot start process %q in state %s", name, mp.State)
 	}
 
+	// Phase 7: check all dependencies are Running before starting.
+	if len(mp.Def.DependsOn) > 0 {
+		if err := checkDepsRunning(s.processes, mp.Def); err != nil {
+			s.mu.Unlock()
+			return err
+		}
+	}
+
 	// Transition to Starting while holding lock — makes the state visible immediately
 	// to concurrent callers of Get() and List().
 	if err := transition(mp, StateStarting); err != nil {

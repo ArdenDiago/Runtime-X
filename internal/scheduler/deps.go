@@ -15,6 +15,10 @@ var ErrDependencyCycle = errors.New("dependency cycle detected")
 // a process that is not registered.
 var ErrDependencyNotFound = errors.New("dependency not found")
 
+// ErrDependencyNotReady is returned by Start when a dependency listed in
+// DependsOn is not in StateRunning.
+var ErrDependencyNotReady = errors.New("dependency not running")
+
 // topoCheck verifies that adding newDef to the existing set of processes does
 // not introduce a cycle or reference a non-existent process name.
 // Called from Register() while holding the scheduler write lock.
@@ -132,6 +136,25 @@ func topoOrder(processes map[string]*ManagedProcess) ([][]string, error) {
 		return nil, fmt.Errorf("%w: topoOrder found unexpected cycle", ErrDependencyCycle)
 	}
 	return layers, nil
+}
+
+// checkDepsRunning checks that every process listed in def.DependsOn is in
+// StateRunning. Called from Start() while holding the scheduler write lock.
+// processes is the full registered process map; def is the process being started.
+// Returns ErrDependencyNotReady (wrapped) if any dependency is not Running.
+func checkDepsRunning(processes map[string]*ManagedProcess, def ProcessDef) error {
+	for _, dep := range def.DependsOn {
+		mp, ok := processes[dep]
+		if !ok || mp.State != StateRunning {
+			var current State
+			if ok {
+				current = mp.State
+			}
+			return fmt.Errorf("%w: %s requires %q to be running (current state: %s)",
+				ErrDependencyNotReady, def.Name, dep, current)
+		}
+	}
+	return nil
 }
 
 // StartAll starts all registered processes in topological order.
