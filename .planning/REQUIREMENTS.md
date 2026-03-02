@@ -24,9 +24,9 @@ Requirements for v1.1 Full-Stack Process Manager. Each maps to roadmap phases.
 
 ### Dependency Ordering
 
-- [ ] **DEP-01**: User can specify that process B depends on process A (B starts only after A is running)
+- [x] **DEP-01**: User can specify that process B depends on process A (B starts only after A is running)
 - [ ] **DEP-02**: Scheduler starts processes in topological order respecting all dependency edges
-- [ ] **DEP-03**: Circular dependencies are detected and rejected at registration time with a clear error
+- [x] **DEP-03**: Circular dependencies are detected and rejected at registration time with a clear error
 
 ### Restart Policies
 
@@ -118,9 +118,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCH-02 | Phase 6 | Complete |
 | SCH-03 | Phase 6 | Complete |
 | SCH-04 | Phase 6 | Complete |
-| DEP-01 | Phase 7 | Pending |
+| DEP-01 | Phase 7 | Complete |
 | DEP-02 | Phase 7 | Pending |
-| DEP-03 | Phase 7 | Pending |
+| DEP-03 | Phase 7 | Complete |
 | RST-01 | Phase 8 | Pending |
 | RST-02 | Phase 8 | Pending |
 | RST-03 | Phase 8 | Pending |

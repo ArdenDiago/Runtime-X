@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 6: Scheduler Start, Stop, and Lifecycle
+**Current focus:** v1.1 — Phase 7: Dependency Ordering
 
 ## Current Position
 
-Phase: 6 of 11 (Scheduler Start, Stop, and Lifecycle)
-Plan: 2 of 2 complete
-Status: Phase 6 complete — Start(), Stop(), captureOutput(), monitorProcess() implemented with TDD (17 tests, zero races)
-Last activity: 2026-03-02 — Phase 6 plan 02 executed (Stop() SIGTERM/SIGKILL escalation, doneCh handshake, process group kill, 8 tests)
+Phase: 7 of 11 (Dependency Ordering)
+Plan: 1 of 2 complete
+Status: Phase 7 plan 01 complete — Kahn's cycle detection, topoCheck, topoOrder, StartAll() implemented with TDD (13 new tests, 30 total, zero races)
+Last activity: 2026-03-02 — Phase 7 plan 01 executed (ErrDependencyCycle, ErrDependencyNotFound, topoCheck, topoOrder, StartAll, 13 tests)
 
-Progress: [█████░░░░░] 30% (v1.1) — v1.0 complete, Phase 4 done, Phase 5 done (all 3 plans), Phase 6 done (all 2 plans)
+Progress: [█████░░░░░] 32% (v1.1) — v1.0 complete, Phase 4 done, Phase 5 done (all 3 plans), Phase 6 done (all 2 plans), Phase 7 plan 01 done
 
 ## Performance Metrics
 
@@ -35,6 +35,7 @@ Progress: [█████░░░░░] 30% (v1.1) — v1.0 complete, Phase 4
 - Last 5 plans: ~6, ~6, ~5.5, ~5.5, ~5.5 min
 - Trend: Stable
 | Phase 06-scheduler-start-stop-and-lifecycle P02 | 2 | 2 tasks | 2 files |
+| Phase 07-dependency-ordering P01 | 2 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Phase 6 plan 01 decisions:
 - [Phase 06-02]: Stop() creates doneCh while holding the write lock before releasing it: ensures monitorProcess always finds doneCh != nil when it acquires the lock after cmd.Wait(), eliminating the race window where monitor could close a nil channel or Stop() waits on an unclosable channel
 - [Phase 06-02]: Default StopTimeout of 5 seconds applied when ProcessDef.StopTimeout <= 0: balances responsiveness with grace period for well-behaved processes
 - [Phase 06-02]: SIGKILL escalation blocks unconditionally on doneCh: SIGKILL cannot be caught or ignored, so a second timeout adds only latency without benefit
+- [Phase 07-01]: [07-01 impl]: topoCheck does eager missing-name validation before Kahn's BFS — clearer error messages and avoids ghost nodes in graph
+- [Phase 07-01]: [07-01 impl]: waitRunning() checks terminal states (Failed/Stopped) to fail fast instead of waiting out full timeout
+- [Phase 07-01]: [07-01 impl]: StartAll() snapshots s.processes under RLock before releasing for Start() calls — prevents lock inversion
 
 ### Pending Todos
 
@@ -88,6 +92,6 @@ Resolved:
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 06-02-PLAN.md (Stop() with SIGTERM/SIGKILL escalation — full process lifecycle start/stop working, 17 tests, zero races)
+Stopped at: Completed 07-01-PLAN.md (Kahn's cycle detection, topoCheck, topoOrder, StartAll() — 13 new tests, 30 total, zero races)
 Resume file: None
-Next: Execute Phase 7 — Dependency ordering (start processes in dependency order, detect cycles)
+Next: Execute Phase 7 Plan 02 — StartAll() integration with real processes (diamond/chain ordering tests)
