@@ -23,7 +23,7 @@
 - [x] **Phase 4: Codebase Cleanup** (1/1 plans) — Remove legacy Docker/API code and restore a clean, compiling baseline — completed 2026-03-01
 - [x] **Phase 5: Scheduler Data Structures and Log Buffer** — Define core types and mutex-safe ring buffer that all later scheduler logic depends on (completed 2026-03-01)
 - [x] **Phase 6: Scheduler Start, Stop, and Lifecycle** — Implement the core process lifecycle methods on a race-free foundation (completed 2026-03-02)
-- [ ] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator
+- [x] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator (completed 2026-03-02)
 - [ ] **Phase 8: Restart Policies** — Add exponential backoff restart with cancellable goroutines as the second v1.1 differentiator
 - [ ] **Phase 9: REST API** — Expose the full scheduler as a thin HTTP adapter with CORS support
 - [ ] **Phase 10: CLI serve and Graceful Shutdown** — Wire everything into `rtx serve` with clean signal handling
@@ -82,7 +82,7 @@ Plans:
   2. A diamond dependency (B and C both depend on A, D depends on B and C) starts all processes in a valid order without starting A twice
   3. Registering a circular dependency (A → B → A) returns an error immediately and the definition is rejected
   4. A missing dependency reference (process B depends on nonexistent process A) returns a clear error
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 07-01-PLAN.md — TDD: Cycle detection (topoCheck) and topological ordering (topoOrder) with Register() integration
 - [ ] 07-02-PLAN.md — TDD: StartAll() ordered startup and Start() dependency-readiness check
@@ -146,7 +146,7 @@ Plans:
 | 4. Codebase Cleanup | v1.1 | Complete    | 2026-03-01 | 2026-03-01 |
 | 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete    | 2026-03-01 | - |
 | 6. Scheduler Start, Stop, and Lifecycle | 2/2 | Complete   | 2026-03-02 | - |
-| 7. Dependency Ordering | 1/2 | In Progress|  | - |
+| 7. Dependency Ordering | 2/2 | Complete   | 2026-03-02 | - |
 | 8. Restart Policies | v1.1 | 0/TBD | Not started | - |
 | 9. REST API | v1.1 | 0/TBD | Not started | - |
 | 10. CLI serve and Graceful Shutdown | v1.1 | 0/TBD | Not started | - |
