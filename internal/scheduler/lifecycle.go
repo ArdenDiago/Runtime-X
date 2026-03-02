@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -118,6 +119,15 @@ func (s *Scheduler) Start(name string) error {
 	go monitorProcess(s, mp, cmd)
 
 	return nil
+}
+
+// Stop sends SIGTERM to the named process's group and waits for it to exit.
+// If the process does not exit within StopTimeout, SIGKILL is sent.
+// Returns ErrNotFound if the process is not registered.
+// Returns ErrNotRunning if the process is not in the Running state.
+// Returns a descriptive error if the process is in a transient state (Starting, Stopping).
+func (s *Scheduler) Stop(name string) error {
+	return errors.New("not implemented")
 }
 
 // captureOutput reads lines from r using a bufio.Scanner and writes each line

@@ -316,6 +316,269 @@ func TestStart_Race(t *testing.T) {
 	wg.Wait()
 }
 
+// getStoppedAt returns StoppedAt of the named process under the read lock.
+func getStoppedAt(s *Scheduler, name string) time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	mp, ok := s.processes[name]
+	if !ok {
+		return time.Time{}
+	}
+	return mp.StoppedAt
+}
+
+// getStartedAt returns StartedAt of the named process under the read lock.
+func getStartedAt(s *Scheduler, name string) time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	mp, ok := s.processes[name]
+	if !ok {
+		return time.Time{}
+	}
+	return mp.StartedAt
+}
+
+// TestStop_RunningToStopped verifies that Stop() on a Running process sends
+// SIGTERM, waits for exit, transitions to Stopped, and sets StoppedAt.
+func TestStop_RunningToStopped(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{Name: "sleeper", Command: "sleep", Args: []string{"30"}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killProcess(t, s, "sleeper") })
+
+	if err := s.Start("sleeper"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, s, "sleeper", StateRunning, 2*time.Second)
+
+	err := s.Stop("sleeper")
+	if err != nil {
+		t.Fatalf("Stop: unexpected error: %v", err)
+	}
+
+	state, _ := getState(s, "sleeper")
+	if state != StateStopped {
+		t.Errorf("State = %v, want StateStopped", state)
+	}
+
+	stoppedAt := getStoppedAt(s, "sleeper")
+	startedAt := getStartedAt(s, "sleeper")
+	if stoppedAt.IsZero() {
+		t.Error("StoppedAt is zero, want non-zero")
+	}
+	if !stoppedAt.After(startedAt) {
+		t.Errorf("StoppedAt %v not after StartedAt %v", stoppedAt, startedAt)
+	}
+}
+
+// TestStop_NotFound verifies that Stop() on an unregistered process returns ErrNotFound.
+func TestStop_NotFound(t *testing.T) {
+	s := New()
+
+	err := s.Stop("nonexistent")
+	if err == nil {
+		t.Fatal("Stop nonexistent: expected ErrNotFound, got nil")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("Stop nonexistent: got %v, want wrapping ErrNotFound", err)
+	}
+}
+
+// TestStop_NotRunning verifies that Stop() on an Idle process returns ErrNotRunning.
+func TestStop_NotRunning(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{Name: "idle-proc", Command: "echo", Args: []string{"hi"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	err := s.Stop("idle-proc")
+	if err == nil {
+		t.Fatal("Stop idle-proc: expected ErrNotRunning, got nil")
+	}
+	if !errors.Is(err, ErrNotRunning) {
+		t.Errorf("Stop idle-proc: got %v, want wrapping ErrNotRunning", err)
+	}
+}
+
+// TestStop_AlreadyStopped verifies that Stop() on a naturally-stopped process returns ErrNotRunning.
+func TestStop_AlreadyStopped(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{Name: "echo-done", Command: "true"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Start("echo-done"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, s, "echo-done", StateStopped, 2*time.Second)
+
+	err := s.Stop("echo-done")
+	if err == nil {
+		t.Fatal("Stop echo-done after natural exit: expected ErrNotRunning, got nil")
+	}
+	if !errors.Is(err, ErrNotRunning) {
+		t.Errorf("Stop echo-done: got %v, want wrapping ErrNotRunning", err)
+	}
+}
+
+// TestStop_ProcessGroupKill verifies that Stop() on a process that spawned
+// children terminates without hanging, and state becomes Stopped.
+func TestStop_ProcessGroupKill(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{
+		Name:    "parent-child",
+		Command: "sh",
+		Args:    []string{"-c", "sleep 60 & wait"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killProcess(t, s, "parent-child") })
+
+	if err := s.Start("parent-child"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, s, "parent-child", StateRunning, 2*time.Second)
+
+	err := s.Stop("parent-child")
+	if err != nil {
+		t.Fatalf("Stop parent-child: unexpected error: %v", err)
+	}
+
+	state, _ := getState(s, "parent-child")
+	if state != StateStopped {
+		t.Errorf("State = %v, want StateStopped", state)
+	}
+}
+
+// TestStop_SIGKILLEscalation verifies that Stop() escalates to SIGKILL when a
+// process traps SIGTERM and does not exit within StopTimeout.
+func TestStop_SIGKILLEscalation(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{
+		Name:        "trap-sigterm",
+		Command:     "sh",
+		Args:        []string{"-c", "trap '' TERM; sleep 60"},
+		StopTimeout: 500 * time.Millisecond,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killProcess(t, s, "trap-sigterm") })
+
+	if err := s.Start("trap-sigterm"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, s, "trap-sigterm", StateRunning, 2*time.Second)
+
+	start := time.Now()
+	err := s.Stop("trap-sigterm")
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Stop trap-sigterm: unexpected error: %v", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("Stop took %v, want < 2s (timeout 500ms + SIGKILL should be fast)", elapsed)
+	}
+
+	state, _ := getState(s, "trap-sigterm")
+	if state != StateStopped {
+		t.Errorf("State = %v, want StateStopped", state)
+	}
+}
+
+// TestStop_ConcurrentStartStop verifies that concurrent Stop() and List() calls
+// produce no data races and Stop() returns nil.
+func TestStop_ConcurrentStartStop(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{Name: "racer", Command: "sleep", Args: []string{"30"}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killProcess(t, s, "racer") })
+
+	if err := s.Start("racer"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, s, "racer", StateRunning, 2*time.Second)
+
+	var wg sync.WaitGroup
+	var stopErr error
+
+	// Goroutine A: stop the process.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		stopErr = s.Stop("racer")
+	}()
+
+	// Goroutine B: call List() 50 times concurrently.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			s.List()
+		}
+	}()
+
+	wg.Wait()
+
+	if stopErr != nil {
+		t.Errorf("Stop racer: unexpected error: %v", stopErr)
+	}
+}
+
+// TestStop_CapturesShutdownOutput verifies that output captured before Stop() is
+// still available via Logs() after the process exits.
+func TestStop_CapturesShutdownOutput(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{
+		Name:    "shutdown-msg",
+		Command: "sh",
+		Args:    []string{"-c", "echo starting; sleep 30"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killProcess(t, s, "shutdown-msg") })
+
+	if err := s.Start("shutdown-msg"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForState(t, s, "shutdown-msg", StateRunning, 2*time.Second)
+
+	// Wait for "starting" to be captured in the log buffer.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		logs, _ := s.Logs("shutdown-msg")
+		for _, e := range logs {
+			if contains(e.Text, "starting") {
+				goto stopPhase
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for 'starting' log entry before Stop()")
+
+stopPhase:
+	if err := s.Stop("shutdown-msg"); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+
+	logs, err := s.Logs("shutdown-msg")
+	if err != nil {
+		t.Fatalf("Logs: %v", err)
+	}
+	found := false
+	for _, e := range logs {
+		if contains(e.Text, "starting") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Logs: expected 'starting' entry, got %v", logs)
+	}
+}
+
 // contains is a simple substring check helper.
 func contains(s, sub string) bool {
 	if len(sub) == 0 {
