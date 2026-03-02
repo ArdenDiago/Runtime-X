@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 5: Scheduler Data Structures and Log Buffer
+**Current focus:** v1.1 — Phase 7: Dependency Ordering
 
 ## Current Position
 
-Phase: 5 of 11 (Scheduler Data Structures and Log Buffer)
-Plan: 1 of 3 complete
-Status: Phase 5 plan 01 complete — log buffer implemented
-Last activity: 2026-03-01 — Phase 5 plan 01 executed (logBuffer ring buffer with TDD)
+Phase: 7 of 11 (Dependency Ordering)
+Plan: 2 of 2 complete (Phase 7 COMPLETE)
+Status: Phase 7 complete — ErrDependencyNotReady, checkDepsRunning(), Start() dependency check, 7 integration tests with real sleep processes (chain, diamond, independent), all 37 tests pass with -race
+Last activity: 2026-03-02 — Phase 7 plan 02 executed (ErrDependencyNotReady, checkDepsRunning, Start() dependency guard, 7 new integration tests)
 
-Progress: [██░░░░░░░░] 15% (v1.1) — v1.0 complete, Phase 4 done, Phase 5.1 done
+Progress: [█████░░░░░] 36% (v1.1) — v1.0 complete, Phase 4 done, Phase 5 done (all 3 plans), Phase 6 done (all 2 plans), Phase 7 done (all 2 plans)
 
 ## Performance Metrics
 
@@ -34,6 +34,9 @@ Progress: [██░░░░░░░░] 15% (v1.1) — v1.0 complete, Phase 4
 **Recent Trend:**
 - Last 5 plans: ~6, ~6, ~5.5, ~5.5, ~5.5 min
 - Trend: Stable
+| Phase 06-scheduler-start-stop-and-lifecycle P02 | 2 | 2 tasks | 2 files |
+| Phase 07-dependency-ordering P01 | 2 | 2 tasks | 4 files |
+| Phase 07-dependency-ordering P02 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -58,6 +61,25 @@ Phase 5 plan 01 decisions:
 - [05-01 arch]: logBuffer has its own independent mutex separate from Scheduler's RWMutex — prevents Phase 6 deadlock where cmd.Start() goroutines call Write() while scheduler may hold write lock
 - [05-01 impl]: Default buffer size 1000 for size <= 0 — prevents divide-by-zero panic in modulo, matches ProcessDef.LogBufferSize zero-value behavior
 
+Phase 5 plan 02 decisions:
+- [05-02 arch]: transition() is unexported — Phase 6 calls it from Scheduler methods holding the write lock; same-package tests call it directly
+- [05-02 arch]: Remove() permits Idle, Stopped, and Failed states — Idle was never started; Failed may need removal before retry
+- [05-02 arch]: Scheduler.Logs() releases RLock before calling mp.logs.Lines() — prevents lock-ordering hazard with Phase 6 writer goroutines
+- [05-02 impl]: validateName regexp ^[a-z0-9][a-z0-9-]*$ — first char cannot be hyphen, prevents URL path segment confusion in Phase 9 HTTP handlers
+
+Phase 6 plan 01 decisions:
+- [06-01 bug]: FSM must allow Running->Stopped for natural clean exit — Phase 5 FSM only had Running->{Stopping,Failed}; monitorProcess silently failed to transition on exit code 0, leaving state stuck at Running; fixed by adding StateStopped to StateRunning valid transitions
+- [06-01 test]: Same-package test helpers must hold s.mu.RLock() for race-safe field reads — s.Get() returns live pointer after releasing lock; reading mp.State without lock causes -race failures; getState/getExitCode/getPID helpers access s.mu directly
+- [06-01 arch]: mp.cmd is left set after process exits — post-mortem inspection via mp.cmd.ProcessState is valuable; only mp.doneCh is cleared to nil by monitorProcess
+- [Phase 06-02]: Stop() creates doneCh while holding the write lock before releasing it: ensures monitorProcess always finds doneCh != nil when it acquires the lock after cmd.Wait(), eliminating the race window where monitor could close a nil channel or Stop() waits on an unclosable channel
+- [Phase 06-02]: Default StopTimeout of 5 seconds applied when ProcessDef.StopTimeout <= 0: balances responsiveness with grace period for well-behaved processes
+- [Phase 06-02]: SIGKILL escalation blocks unconditionally on doneCh: SIGKILL cannot be caught or ignored, so a second timeout adds only latency without benefit
+- [Phase 07-01]: [07-01 impl]: topoCheck does eager missing-name validation before Kahn's BFS — clearer error messages and avoids ghost nodes in graph
+- [Phase 07-01]: [07-01 impl]: waitRunning() checks terminal states (Failed/Stopped) to fail fast instead of waiting out full timeout
+- [Phase 07-01]: [07-01 impl]: StartAll() snapshots s.processes under RLock before releasing for Start() calls — prevents lock inversion
+- [Phase 07-02]: [07-02 impl]: checkDepsRunning() called inside Start() write lock before StateStarting transition — prevents TOCTOU and no additional locking needed
+- [Phase 07-02]: [07-02 impl]: Reuse existing killProcess/getState test helpers from lifecycle_test.go — same-package tests share helpers, no redeclaration
+
 ### Pending Todos
 
 None.
@@ -72,7 +94,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Completed 05-01-PLAN.md (logBuffer ring buffer — mutex-safe ring buffer with Write/Lines/Len)
+Last session: 2026-03-02
+Stopped at: Completed 07-02-PLAN.md (ErrDependencyNotReady, checkDepsRunning, Start() dependency check — 7 integration tests with real processes, all 37 tests pass with -race)
 Resume file: None
-Next: Execute Phase 5 Plan 02 — ProcessDef, ManagedProcess, State types
+Next: Execute Phase 8 — Restart Policy

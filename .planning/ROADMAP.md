@@ -21,9 +21,9 @@
 **Milestone Goal:** Transform rtx from a single-process CLI runner into a multi-process manager with a web UI for full browser-based process management.
 
 - [x] **Phase 4: Codebase Cleanup** (1/1 plans) — Remove legacy Docker/API code and restore a clean, compiling baseline — completed 2026-03-01
-- [ ] **Phase 5: Scheduler Data Structures and Log Buffer** — Define core types and mutex-safe ring buffer that all later scheduler logic depends on
-- [ ] **Phase 6: Scheduler Start, Stop, and Lifecycle** — Implement the core process lifecycle methods on a race-free foundation
-- [ ] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator
+- [x] **Phase 5: Scheduler Data Structures and Log Buffer** — Define core types and mutex-safe ring buffer that all later scheduler logic depends on (completed 2026-03-01)
+- [x] **Phase 6: Scheduler Start, Stop, and Lifecycle** — Implement the core process lifecycle methods on a race-free foundation (completed 2026-03-02)
+- [x] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator (completed 2026-03-02)
 - [ ] **Phase 8: Restart Policies** — Add exponential backoff restart with cancellable goroutines as the second v1.1 differentiator
 - [ ] **Phase 9: REST API** — Expose the full scheduler as a thin HTTP adapter with CORS support
 - [ ] **Phase 10: CLI serve and Graceful Shutdown** — Wire everything into `rtx serve` with clean signal handling
@@ -53,7 +53,7 @@ Plans:
   2. A process's log buffer captures output and evicts oldest lines when the ring is full
   3. `go test -race ./internal/scheduler/...` passes with concurrent log writes and reads — no data races detected
   4. Retrieved log lines from the ring buffer reflect the most recent output, not overwritten history
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 05-01-PLAN.md — TDD: Log buffer ring buffer (mutex-safe, evict-oldest, concurrent read/write)
 - [ ] 05-02-PLAN.md — TDD: Scheduler types and registration (ProcessDef, State FSM, Register/Remove/Get/List/Logs)
@@ -68,7 +68,10 @@ Plans:
   3. User can list all processes and see each one's current status (stopped / running / failed)
   4. Stopping an already-stopped process returns a clear error, not a panic or hang
   5. `go test -race ./internal/scheduler/...` passes — no data races in start/stop concurrent paths
-**Plans**: TBD
+**Plans:** 2/2 plans complete
+Plans:
+- [ ] 06-01-PLAN.md — TDD: Start(), monitor goroutine, and output capture (SCH-02, SCH-04)
+- [ ] 06-02-PLAN.md — TDD: Stop() with SIGTERM/SIGKILL escalation and process group kill (SCH-03)
 
 ### Phase 7: Dependency Ordering
 **Goal**: Processes start in topological order — a process waits for its dependencies to be running before it starts, and circular dependencies are rejected at registration time
@@ -79,7 +82,10 @@ Plans:
   2. A diamond dependency (B and C both depend on A, D depends on B and C) starts all processes in a valid order without starting A twice
   3. Registering a circular dependency (A → B → A) returns an error immediately and the definition is rejected
   4. A missing dependency reference (process B depends on nonexistent process A) returns a clear error
-**Plans**: TBD
+**Plans:** 2/2 plans complete
+Plans:
+- [ ] 07-01-PLAN.md — TDD: Cycle detection (topoCheck) and topological ordering (topoOrder) with Register() integration
+- [ ] 07-02-PLAN.md — TDD: StartAll() ordered startup and Start() dependency-readiness check
 
 ### Phase 8: Restart Policies
 **Goal**: Processes with a restart policy automatically restart after exit according to their configured mode and exponential backoff — and pending restarts can be cancelled by an explicit stop
@@ -138,9 +144,9 @@ Plans:
 | 2. Signal Forwarding | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 3. Tests and Validation | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 4. Codebase Cleanup | v1.1 | Complete    | 2026-03-01 | 2026-03-01 |
-| 5. Scheduler Data Structures and Log Buffer | 1/2 | In Progress|  | - |
-| 6. Scheduler Start, Stop, and Lifecycle | v1.1 | 0/TBD | Not started | - |
-| 7. Dependency Ordering | v1.1 | 0/TBD | Not started | - |
+| 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete    | 2026-03-01 | - |
+| 6. Scheduler Start, Stop, and Lifecycle | 2/2 | Complete   | 2026-03-02 | - |
+| 7. Dependency Ordering | 2/2 | Complete   | 2026-03-02 | - |
 | 8. Restart Policies | v1.1 | 0/TBD | Not started | - |
 | 9. REST API | v1.1 | 0/TBD | Not started | - |
 | 10. CLI serve and Graceful Shutdown | v1.1 | 0/TBD | Not started | - |

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"errors"
 	"fmt"
+	"os/exec"
 	"time"
 )
 
@@ -47,11 +48,13 @@ type ProcessDef struct {
 	// RestartPolicy configures automatic restart behaviour after the process exits.
 	RestartPolicy RestartPolicy
 	// DependsOn lists process names that must be running before this process starts.
-	// This field is stored but ignored until Phase 7 wires up dependency ordering.
 	DependsOn []string
 	// LogBufferSize is the number of log lines to retain per process.
 	// A value <= 0 is replaced with the default of 1000 at registration time.
 	LogBufferSize int
+	// StopTimeout is how long Stop() waits after SIGTERM before escalating to SIGKILL.
+	// A zero value uses the scheduler default (5 seconds).
+	StopTimeout time.Duration
 }
 
 // State is the lifecycle state of a managed process.
@@ -101,7 +104,9 @@ var ErrInvalidTransition = errors.New("invalid state transition")
 var validTransitions = map[State][]State{
 	StateIdle:     {StateStarting},
 	StateStarting: {StateRunning, StateFailed},
-	StateRunning:  {StateStopping, StateFailed},
+	// StateRunning allows → StateStopped for natural clean exit (exit code 0),
+	// → StateStopping when Stop() sends a signal, and → StateFailed for crashes.
+	StateRunning:  {StateStopping, StateStopped, StateFailed},
 	StateStopping: {StateStopped, StateFailed},
 	StateStopped:  {StateStarting}, // allows restart
 	StateFailed:   {StateStarting}, // allows retry
@@ -151,4 +156,10 @@ type ManagedProcess struct {
 	RestartCount int
 	// logs is the per-process ring buffer; unexported — accessed via Scheduler.Logs().
 	logs *logBuffer
+
+	// Phase 6 runtime fields — zeroed between restarts.
+	// cmd is the active exec.Cmd; nil when not running. Set by Start(), read by Stop().
+	cmd *exec.Cmd
+	// doneCh is nil unless Stop() is pending; closed by the monitor goroutine on exit.
+	doneCh chan struct{}
 }

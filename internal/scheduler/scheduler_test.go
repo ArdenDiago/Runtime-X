@@ -281,6 +281,7 @@ func TestStateTransitions(t *testing.T) {
 		{StateStarting, StateRunning},
 		{StateStarting, StateFailed},
 		{StateRunning, StateStopping},
+		{StateRunning, StateStopped}, // natural clean exit (exit code 0)
 		{StateRunning, StateFailed},
 		{StateStopping, StateStopped},
 		{StateStopping, StateFailed},
