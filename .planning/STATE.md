@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 6 of 11 (Scheduler Start, Stop, and Lifecycle)
-Plan: 1 of 2 complete
-Status: Phase 6 plan 01 complete — Start(), captureOutput(), monitorProcess() implemented with TDD
-Last activity: 2026-03-02 — Phase 6 plan 01 executed (Start()+monitor goroutine+output capture, 9 tests, zero races)
+Plan: 2 of 2 complete
+Status: Phase 6 complete — Start(), Stop(), captureOutput(), monitorProcess() implemented with TDD (17 tests, zero races)
+Last activity: 2026-03-02 — Phase 6 plan 02 executed (Stop() SIGTERM/SIGKILL escalation, doneCh handshake, process group kill, 8 tests)
 
-Progress: [████░░░░░░] 25% (v1.1) — v1.0 complete, Phase 4 done, Phase 5 done (all 3 plans), Phase 6.1 done
+Progress: [█████░░░░░] 30% (v1.1) — v1.0 complete, Phase 4 done, Phase 5 done (all 3 plans), Phase 6 done (all 2 plans)
 
 ## Performance Metrics
 
@@ -34,6 +34,7 @@ Progress: [████░░░░░░] 25% (v1.1) — v1.0 complete, Phase 4
 **Recent Trend:**
 - Last 5 plans: ~6, ~6, ~5.5, ~5.5, ~5.5 min
 - Trend: Stable
+| Phase 06-scheduler-start-stop-and-lifecycle P02 | 2 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,9 @@ Phase 6 plan 01 decisions:
 - [06-01 bug]: FSM must allow Running->Stopped for natural clean exit — Phase 5 FSM only had Running->{Stopping,Failed}; monitorProcess silently failed to transition on exit code 0, leaving state stuck at Running; fixed by adding StateStopped to StateRunning valid transitions
 - [06-01 test]: Same-package test helpers must hold s.mu.RLock() for race-safe field reads — s.Get() returns live pointer after releasing lock; reading mp.State without lock causes -race failures; getState/getExitCode/getPID helpers access s.mu directly
 - [06-01 arch]: mp.cmd is left set after process exits — post-mortem inspection via mp.cmd.ProcessState is valuable; only mp.doneCh is cleared to nil by monitorProcess
+- [Phase 06-02]: Stop() creates doneCh while holding the write lock before releasing it: ensures monitorProcess always finds doneCh != nil when it acquires the lock after cmd.Wait(), eliminating the race window where monitor could close a nil channel or Stop() waits on an unclosable channel
+- [Phase 06-02]: Default StopTimeout of 5 seconds applied when ProcessDef.StopTimeout <= 0: balances responsiveness with grace period for well-behaved processes
+- [Phase 06-02]: SIGKILL escalation blocks unconditionally on doneCh: SIGKILL cannot be caught or ignored, so a second timeout adds only latency without benefit
 
 ### Pending Todos
 
@@ -84,6 +88,6 @@ Resolved:
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 06-01-PLAN.md (Start()+captureOutput()+monitorProcess() — real OS process spawning with PID tracking, state transitions, and log capture)
+Stopped at: Completed 06-02-PLAN.md (Stop() with SIGTERM/SIGKILL escalation — full process lifecycle start/stop working, 17 tests, zero races)
 Resume file: None
-Next: Execute Phase 6 Plan 02 — Stop() implementation (SIGTERM + SIGKILL escalation, process group kill, doneCh handshake with monitor)
+Next: Execute Phase 7 — Dependency ordering (start processes in dependency order, detect cycles)
