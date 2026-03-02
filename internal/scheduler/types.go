@@ -48,7 +48,6 @@ type ProcessDef struct {
 	// RestartPolicy configures automatic restart behaviour after the process exits.
 	RestartPolicy RestartPolicy
 	// DependsOn lists process names that must be running before this process starts.
-	// This field is stored but ignored until Phase 7 wires up dependency ordering.
 	DependsOn []string
 	// LogBufferSize is the number of log lines to retain per process.
 	// A value <= 0 is replaced with the default of 1000 at registration time.

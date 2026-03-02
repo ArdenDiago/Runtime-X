@@ -64,6 +64,14 @@ func (s *Scheduler) Register(def ProcessDef) error {
 		return fmt.Errorf("%w: %s", ErrAlreadyExists, def.Name)
 	}
 
+	// Phase 7: validate dependency edges before accepting the definition.
+	// topoCheck reads s.processes directly — safe because we hold the write lock.
+	if len(def.DependsOn) > 0 {
+		if err := topoCheck(s.processes, def); err != nil {
+			return err
+		}
+	}
+
 	s.processes[def.Name] = &ManagedProcess{
 		Def:   def,
 		State: StateIdle,
