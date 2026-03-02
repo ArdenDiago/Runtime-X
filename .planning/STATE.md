@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 5: Scheduler Data Structures and Log Buffer
+**Current focus:** v1.1 — Phase 6: Scheduler Start, Stop, and Lifecycle
 
 ## Current Position
 
-Phase: 5 of 11 (Scheduler Data Structures and Log Buffer)
-Plan: 2 of 3 complete
-Status: Phase 5 plan 02 complete — scheduler types and registration implemented
-Last activity: 2026-03-01 — Phase 5 plan 02 executed (ProcessDef/ManagedProcess/State FSM/Scheduler with TDD)
+Phase: 6 of 11 (Scheduler Start, Stop, and Lifecycle)
+Plan: 1 of 2 complete
+Status: Phase 6 plan 01 complete — Start(), captureOutput(), monitorProcess() implemented with TDD
+Last activity: 2026-03-02 — Phase 6 plan 01 executed (Start()+monitor goroutine+output capture, 9 tests, zero races)
 
-Progress: [███░░░░░░░] 20% (v1.1) — v1.0 complete, Phase 4 done, Phase 5.1 done, Phase 5.2 done
+Progress: [████░░░░░░] 25% (v1.1) — v1.0 complete, Phase 4 done, Phase 5 done (all 3 plans), Phase 6.1 done
 
 ## Performance Metrics
 
@@ -64,6 +64,11 @@ Phase 5 plan 02 decisions:
 - [05-02 arch]: Scheduler.Logs() releases RLock before calling mp.logs.Lines() — prevents lock-ordering hazard with Phase 6 writer goroutines
 - [05-02 impl]: validateName regexp ^[a-z0-9][a-z0-9-]*$ — first char cannot be hyphen, prevents URL path segment confusion in Phase 9 HTTP handlers
 
+Phase 6 plan 01 decisions:
+- [06-01 bug]: FSM must allow Running->Stopped for natural clean exit — Phase 5 FSM only had Running->{Stopping,Failed}; monitorProcess silently failed to transition on exit code 0, leaving state stuck at Running; fixed by adding StateStopped to StateRunning valid transitions
+- [06-01 test]: Same-package test helpers must hold s.mu.RLock() for race-safe field reads — s.Get() returns live pointer after releasing lock; reading mp.State without lock causes -race failures; getState/getExitCode/getPID helpers access s.mu directly
+- [06-01 arch]: mp.cmd is left set after process exits — post-mortem inspection via mp.cmd.ProcessState is valuable; only mp.doneCh is cleared to nil by monitorProcess
+
 ### Pending Todos
 
 None.
@@ -78,7 +83,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Completed 05-02-PLAN.md (Scheduler types and registration — ProcessDef/ManagedProcess/State FSM with Register/Remove/Get/List/Logs)
+Last session: 2026-03-02
+Stopped at: Completed 06-01-PLAN.md (Start()+captureOutput()+monitorProcess() — real OS process spawning with PID tracking, state transitions, and log capture)
 Resume file: None
-Next: Execute Phase 5 Plan 03 — remaining Phase 5 work (if any) or proceed to Phase 6 Scheduler Process Lifecycle
+Next: Execute Phase 6 Plan 02 — Stop() implementation (SIGTERM + SIGKILL escalation, process group kill, doneCh handshake with monitor)

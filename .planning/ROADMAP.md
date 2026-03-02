@@ -68,7 +68,7 @@ Plans:
   3. User can list all processes and see each one's current status (stopped / running / failed)
   4. Stopping an already-stopped process returns a clear error, not a panic or hang
   5. `go test -race ./internal/scheduler/...` passes — no data races in start/stop concurrent paths
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 06-01-PLAN.md — TDD: Start(), monitor goroutine, and output capture (SCH-02, SCH-04)
 - [ ] 06-02-PLAN.md — TDD: Stop() with SIGTERM/SIGKILL escalation and process group kill (SCH-03)
@@ -142,7 +142,7 @@ Plans:
 | 3. Tests and Validation | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 4. Codebase Cleanup | v1.1 | Complete    | 2026-03-01 | 2026-03-01 |
 | 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete    | 2026-03-01 | - |
-| 6. Scheduler Start, Stop, and Lifecycle | v1.1 | 0/2 | Planned | - |
+| 6. Scheduler Start, Stop, and Lifecycle | 1/2 | In Progress|  | - |
 | 7. Dependency Ordering | v1.1 | 0/TBD | Not started | - |
 | 8. Restart Policies | v1.1 | 0/TBD | Not started | - |
 | 9. REST API | v1.1 | 0/TBD | Not started | - |
