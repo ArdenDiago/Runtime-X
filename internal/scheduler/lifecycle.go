@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -121,13 +120,82 @@ func (s *Scheduler) Start(name string) error {
 	return nil
 }
 
-// Stop sends SIGTERM to the named process's group and waits for it to exit.
-// If the process does not exit within StopTimeout, SIGKILL is sent.
+// Stop sends SIGTERM to the named process's process group and blocks until the
+// process exits. If the process does not exit within StopTimeout (defaulting to
+// 5s), SIGKILL is sent to the group — which always terminates the process.
+//
+// Stop transitions the process through Stopping → Stopped in coordination with
+// the monitorProcess goroutine: Stop creates mp.doneCh while holding the write
+// lock, monitorProcess closes it after cmd.Wait() returns and the state is set.
+//
 // Returns ErrNotFound if the process is not registered.
-// Returns ErrNotRunning if the process is not in the Running state.
-// Returns a descriptive error if the process is in a transient state (Starting, Stopping).
+// Returns ErrNotRunning if the process is Stopped, Idle, or Failed.
+// Returns a descriptive error if the process is in Starting or Stopping state.
 func (s *Scheduler) Stop(name string) error {
-	return errors.New("not implemented")
+	s.mu.Lock()
+
+	mp, exists := s.processes[name]
+	if !exists {
+		s.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrNotFound, name)
+	}
+
+	// Validate state allows stopping.
+	switch mp.State {
+	case StateRunning:
+		// allowed — proceed
+	case StateStopped, StateIdle, StateFailed:
+		s.mu.Unlock()
+		return fmt.Errorf("%w: %s (state: %s)", ErrNotRunning, name, mp.State)
+	default:
+		// Starting, Stopping — transient states, reject with descriptive error.
+		s.mu.Unlock()
+		return fmt.Errorf("cannot stop process %q in state %s", name, mp.State)
+	}
+
+	// Transition to Stopping — makes the state visible to concurrent Get()/List().
+	if err := transition(mp, StateStopping); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
+	// Create doneCh before releasing the lock so monitorProcess always finds it set
+	// when it acquires the lock after cmd.Wait(). The monitor closes doneCh only if
+	// non-nil, so creating it here is the handshake that signals Stop() is waiting.
+	doneCh := make(chan struct{})
+	mp.doneCh = doneCh
+
+	// Capture local copies before releasing the lock.
+	pid := mp.cmd.Process.Pid
+	timeout := mp.Def.StopTimeout
+
+	s.mu.Unlock()
+
+	// Default timeout — 5 seconds is enough for well-behaved processes.
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+
+	// Send SIGTERM to the entire process group (negative PID targets the PGID set
+	// by Setpgid:true in Start()). Ignore the error: the process may have exited
+	// naturally between the state check and this call; monitorProcess will notice.
+	_ = syscall.Kill(-pid, syscall.SIGTERM)
+
+	// Wait for monitorProcess to close doneCh (meaning cmd.Wait() returned and
+	// state is Stopped/Failed). If SIGTERM is not honoured within timeout, escalate.
+	select {
+	case <-doneCh:
+		// Process exited gracefully within timeout.
+		return nil
+	case <-time.After(timeout):
+		// SIGTERM ignored — send SIGKILL to the process group. SIGKILL cannot be
+		// caught or ignored, so the process will exit immediately.
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		// Wait unconditionally — monitorProcess will close doneCh once cmd.Wait()
+		// returns, which it will as soon as the OS delivers SIGKILL.
+		<-doneCh
+		return nil
+	}
 }
 
 // captureOutput reads lines from r using a bufio.Scanner and writes each line
