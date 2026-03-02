@@ -8,36 +8,70 @@ import (
 	"time"
 )
 
-// waitForState polls mp.State every 10ms until it matches target or timeout expires.
-// It marks the test as fatal if the state does not reach the target in time.
+// getState returns the current state of the named process under the read lock.
+// Since tests are in the same package, they can access s.mu directly.
+// This avoids the race between reading mp.State (write by monitorProcess under
+// s.mu.Lock()) and reading (test goroutines reading mp.State without a lock).
+func getState(s *Scheduler, name string) (State, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	mp, ok := s.processes[name]
+	if !ok {
+		return StateIdle, false
+	}
+	return mp.State, true
+}
+
+// getExitCode returns ExitCode of the named process under the read lock.
+func getExitCode(s *Scheduler, name string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	mp, ok := s.processes[name]
+	if !ok {
+		return -1
+	}
+	return mp.ExitCode
+}
+
+// getPID returns the PID of the running process under the read lock, or 0 if
+// the process is not running or cmd has not been set.
+func getPID(s *Scheduler, name string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	mp, ok := s.processes[name]
+	if !ok || mp.cmd == nil || mp.cmd.Process == nil {
+		return 0
+	}
+	return mp.cmd.Process.Pid
+}
+
+// killProcess sends SIGKILL to the process group of the named process.
+// Used as test cleanup to ensure long-lived processes are terminated.
+func killProcess(t *testing.T, s *Scheduler, name string) {
+	t.Helper()
+	pid := getPID(s, name)
+	if pid > 0 {
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+	}
+}
+
+// waitForState polls every 10ms until the named process reaches target state or
+// timeout expires. Uses the scheduler read lock on every poll to avoid races.
 func waitForState(t *testing.T, s *Scheduler, name string, target State, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		mp, err := s.Get(name)
-		if err != nil {
-			t.Fatalf("waitForState: Get(%q): %v", name, err)
+		state, ok := getState(s, name)
+		if !ok {
+			t.Fatalf("waitForState: process %q not found", name)
 		}
-		if mp.State == target {
+		if state == target {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	mp, _ := s.Get(name)
-	t.Fatalf("waitForState: process %q state = %v, want %v after %v", name, mp.State, target, timeout)
-}
-
-// killProcess sends SIGKILL to the process group of the named process if it is running.
-// Used as test cleanup to ensure long-lived processes are terminated.
-func killProcess(t *testing.T, s *Scheduler, name string) {
-	t.Helper()
-	mp, err := s.Get(name)
-	if err != nil {
-		return // already removed or not found
-	}
-	if mp.cmd != nil && mp.cmd.Process != nil {
-		_ = syscall.Kill(-mp.cmd.Process.Pid, syscall.SIGKILL)
-	}
+	state, _ := getState(s, name)
+	t.Fatalf("waitForState: process %q state = %v, want %v after %v", name, state, target, timeout)
 }
 
 // TestStart_IdleToRunning verifies that Start() on an Idle process transitions
@@ -53,21 +87,14 @@ func TestStart_IdleToRunning(t *testing.T) {
 		t.Fatalf("Start: unexpected error: %v", err)
 	}
 
-	mp, err := s.Get("sleeper")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
+	state, _ := getState(s, "sleeper")
+	if state != StateRunning {
+		t.Errorf("State = %v, want StateRunning", state)
 	}
-	if mp.State != StateRunning {
-		t.Errorf("State = %v, want StateRunning", mp.State)
-	}
-	if mp.cmd == nil {
-		t.Fatal("cmd is nil after Start()")
-	}
-	if mp.cmd.Process == nil {
-		t.Fatal("cmd.Process is nil after Start()")
-	}
-	if mp.cmd.Process.Pid <= 0 {
-		t.Errorf("PID = %d, want > 0", mp.cmd.Process.Pid)
+
+	pid := getPID(s, "sleeper")
+	if pid <= 0 {
+		t.Errorf("PID = %d, want > 0", pid)
 	}
 }
 
@@ -114,13 +141,12 @@ func TestStart_FromStoppedAndFailed(t *testing.T) {
 		t.Fatalf("re-start from Stopped: %v", err)
 	}
 
-	// Wait for re-start to reach Running then Stopped again.
-	// (echo exits immediately so it may skip straight to Stopped)
+	// Wait for re-start to reach a terminal state (Stopped or Failed).
+	// echo exits immediately so it transitions quickly.
 	deadline := time.Now().Add(2 * time.Second)
 	var finalState State
 	for time.Now().Before(deadline) {
-		mp, _ := s.Get("echo1")
-		finalState = mp.State
+		finalState, _ = getState(s, "echo1")
 		if finalState == StateStopped || finalState == StateFailed {
 			break
 		}
@@ -226,15 +252,13 @@ func TestMonitor_CleanExitToStopped(t *testing.T) {
 
 	waitForState(t, s, "true-cmd", StateStopped, 2*time.Second)
 
-	mp, err := s.Get("true-cmd")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
+	state, _ := getState(s, "true-cmd")
+	if state != StateStopped {
+		t.Errorf("State = %v, want StateStopped", state)
 	}
-	if mp.State != StateStopped {
-		t.Errorf("State = %v, want StateStopped", mp.State)
-	}
-	if mp.ExitCode != 0 {
-		t.Errorf("ExitCode = %d, want 0", mp.ExitCode)
+	code := getExitCode(s, "true-cmd")
+	if code != 0 {
+		t.Errorf("ExitCode = %d, want 0", code)
 	}
 }
 
@@ -252,14 +276,12 @@ func TestMonitor_NonZeroExitToFailed(t *testing.T) {
 
 	waitForState(t, s, "false-cmd", StateFailed, 2*time.Second)
 
-	mp, err := s.Get("false-cmd")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
+	state, _ := getState(s, "false-cmd")
+	if state != StateFailed {
+		t.Errorf("State = %v, want StateFailed", state)
 	}
-	if mp.State != StateFailed {
-		t.Errorf("State = %v, want StateFailed", mp.State)
-	}
-	if mp.ExitCode == 0 {
+	code := getExitCode(s, "false-cmd")
+	if code == 0 {
 		t.Errorf("ExitCode = 0, want non-zero")
 	}
 }
@@ -296,13 +318,16 @@ func TestStart_Race(t *testing.T) {
 
 // contains is a simple substring check helper.
 func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
-		func() bool {
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
-			}
-			return false
-		}())
+	if len(sub) == 0 {
+		return true
+	}
+	if len(s) < len(sub) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }

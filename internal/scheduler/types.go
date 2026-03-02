@@ -105,7 +105,9 @@ var ErrInvalidTransition = errors.New("invalid state transition")
 var validTransitions = map[State][]State{
 	StateIdle:     {StateStarting},
 	StateStarting: {StateRunning, StateFailed},
-	StateRunning:  {StateStopping, StateFailed},
+	// StateRunning allows → StateStopped for natural clean exit (exit code 0),
+	// → StateStopping when Stop() sends a signal, and → StateFailed for crashes.
+	StateRunning:  {StateStopping, StateStopped, StateFailed},
 	StateStopping: {StateStopped, StateFailed},
 	StateStopped:  {StateStarting}, // allows restart
 	StateFailed:   {StateStarting}, // allows retry
