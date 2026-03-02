@@ -21,6 +21,10 @@ var (
 	ErrAlreadyExists = errors.New("process already exists")
 	// ErrNotStopped is returned when Remove is called on a running or starting process.
 	ErrNotStopped = errors.New("process is not stopped")
+	// ErrAlreadyRunning is returned when Start is called on a process that is already running.
+	ErrAlreadyRunning = errors.New("process is already running")
+	// ErrNotRunning is returned when Stop is called on a process that is not running.
+	ErrNotRunning = errors.New("process is not running")
 )
 
 // Scheduler manages the registry of process definitions and their runtime state.

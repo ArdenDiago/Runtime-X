@@ -3,6 +3,7 @@ package scheduler
 import (
 	"errors"
 	"fmt"
+	"os/exec"
 	"time"
 )
 
@@ -52,6 +53,9 @@ type ProcessDef struct {
 	// LogBufferSize is the number of log lines to retain per process.
 	// A value <= 0 is replaced with the default of 1000 at registration time.
 	LogBufferSize int
+	// StopTimeout is how long Stop() waits after SIGTERM before escalating to SIGKILL.
+	// A zero value uses the scheduler default (5 seconds).
+	StopTimeout time.Duration
 }
 
 // State is the lifecycle state of a managed process.
@@ -151,4 +155,10 @@ type ManagedProcess struct {
 	RestartCount int
 	// logs is the per-process ring buffer; unexported — accessed via Scheduler.Logs().
 	logs *logBuffer
+
+	// Phase 6 runtime fields — zeroed between restarts.
+	// cmd is the active exec.Cmd; nil when not running. Set by Start(), read by Stop().
+	cmd *exec.Cmd
+	// doneCh is nil unless Stop() is pending; closed by the monitor goroutine on exit.
+	doneCh chan struct{}
 }
