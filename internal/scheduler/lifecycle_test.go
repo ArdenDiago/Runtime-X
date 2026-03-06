@@ -579,6 +579,192 @@ stopPhase:
 	}
 }
 
+// getRestartCount returns RestartCount of the named process under the read lock.
+func getRestartCount(s *Scheduler, name string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	mp, ok := s.processes[name]
+	if !ok {
+		return -1
+	}
+	return mp.RestartCount
+}
+
+// TestRestartAlways verifies that a process with RestartPolicy{Mode: RestartAlways}
+// is automatically restarted after a clean exit (code 0).
+func TestRestartAlways(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{
+		Name:    "restart-always",
+		Command: "true",
+		RestartPolicy: RestartPolicy{
+			Mode:  RestartAlways,
+			Delay: 10 * time.Millisecond, // tiny delay for test speed
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Start("restart-always"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Wait for the process to be restarted at least once.
+	// The process exits 0 (true), should enter Restarting then Running again.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if getRestartCount(s, "restart-always") >= 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	rc := getRestartCount(s, "restart-always")
+	if rc < 1 {
+		t.Errorf("RestartCount = %d, want >= 1 (process should have been restarted)", rc)
+	}
+
+	// Stop cleanly — the process may currently be Running or Restarting.
+	// Retry Stop() a few times because there is a window between Restarting
+	// and Starting where Stop() would see "transient state" and return error.
+	var stopErr error
+	for i := 0; i < 20; i++ {
+		stopErr = s.Stop("restart-always")
+		if stopErr == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if stopErr != nil {
+		// If stop didn't work, try forceful kill for cleanup
+		killProcess(t, s, "restart-always")
+		t.Logf("Stop: %v (but restart was confirmed)", stopErr)
+	}
+}
+
+// TestRestartOnFailure verifies that a process with RestartPolicy{Mode: RestartOnFailure}
+// is restarted when it exits with a non-zero code.
+func TestRestartOnFailure(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{
+		Name:    "restart-on-fail",
+		Command: "false", // exits with code 1
+		RestartPolicy: RestartPolicy{
+			Mode:  RestartOnFailure,
+			Delay: 10 * time.Millisecond,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Start("restart-on-fail"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Wait for at least one restart.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if getRestartCount(s, "restart-on-fail") >= 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	rc := getRestartCount(s, "restart-on-fail")
+	if rc < 1 {
+		t.Errorf("RestartCount = %d, want >= 1 (process should have been restarted on failure)", rc)
+	}
+
+	// Stop cleanly — retry in case process is in transient Starting state.
+	var stopErr error
+	for i := 0; i < 20; i++ {
+		stopErr = s.Stop("restart-on-fail")
+		if stopErr == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if stopErr != nil {
+		killProcess(t, s, "restart-on-fail")
+		t.Logf("Stop: %v (but restart was confirmed)", stopErr)
+	}
+}
+
+// TestRestartMaxRetries verifies that a process stops restarting after MaxRetries
+// attempts and ends in StateFailed.
+func TestRestartMaxRetries(t *testing.T) {
+	const maxRetries = 3
+	s := New()
+	if err := s.Register(ProcessDef{
+		Name:    "retry-limit",
+		Command: "false", // exits with code 1 every time
+		RestartPolicy: RestartPolicy{
+			Mode:       RestartOnFailure,
+			MaxRetries: maxRetries,
+			Delay:      10 * time.Millisecond,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Start("retry-limit"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Wait for the process to exhaust retries and reach StateFailed.
+	waitForState(t, s, "retry-limit", StateFailed, 5*time.Second)
+
+	rc := getRestartCount(s, "retry-limit")
+	if rc != maxRetries {
+		t.Errorf("RestartCount = %d, want %d (exactly MaxRetries attempts)", rc, maxRetries)
+	}
+
+	state, _ := getState(s, "retry-limit")
+	if state != StateFailed {
+		t.Errorf("State = %v, want StateFailed after exhausting MaxRetries", state)
+	}
+}
+
+// TestStopDuringRestart verifies that calling Stop() while a process is in
+// StateRestarting (backoff wait) cancels the restart and transitions to Stopped.
+func TestStopDuringRestart(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{
+		Name:    "stop-during-restart",
+		Command: "true",
+		RestartPolicy: RestartPolicy{
+			Mode:  RestartAlways,
+			Delay: 2 * time.Second, // long delay so we can catch it in Restarting state
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Start("stop-during-restart"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Wait until the process enters StateRestarting (after the first exit).
+	waitForState(t, s, "stop-during-restart", StateRestarting, 3*time.Second)
+
+	// Call Stop() while in StateRestarting — should cancel the backoff immediately.
+	start := time.Now()
+	if err := s.Stop("stop-during-restart"); err != nil {
+		t.Fatalf("Stop during restart: %v", err)
+	}
+	elapsed := time.Since(start)
+
+	// Stop should return quickly (cancellation, no need to wait for backoff).
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("Stop took %v, want < 500ms (should cancel backoff immediately)", elapsed)
+	}
+
+	state, _ := getState(s, "stop-during-restart")
+	if state != StateStopped {
+		t.Errorf("State = %v, want StateStopped after Stop() during restart", state)
+	}
+}
+
 // contains is a simple substring check helper.
 func contains(s, sub string) bool {
 	if len(sub) == 0 {

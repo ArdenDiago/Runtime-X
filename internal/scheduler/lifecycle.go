@@ -35,7 +35,9 @@ func (s *Scheduler) Start(name string) error {
 	// Validate the state allows starting.
 	switch mp.State {
 	case StateIdle, StateStopped, StateFailed:
-		// allowed — proceed
+		// allowed — proceed (manual start or re-start after terminal state)
+	case StateRestarting:
+		// allowed — called by waitAndRestart goroutine after backoff delay elapses
 	case StateRunning:
 		s.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrAlreadyRunning, name)
@@ -64,6 +66,12 @@ func (s *Scheduler) Start(name string) error {
 	mp.StartedAt = time.Now()
 	mp.StoppedAt = time.Time{}
 	mp.ExitCode = 0
+
+	// Phase 8: create a fresh restartCancelCh on every Start() call.
+	// This channel is closed by Stop() to interrupt any pending backoff goroutine.
+	// Creating it here (under the lock) ensures waitAndRestart always reads a valid
+	// channel pointer before this goroutine is launched.
+	mp.restartCancelCh = make(chan struct{})
 
 	// Capture immutable local copy of definition before releasing the lock.
 	def := mp.Def
@@ -136,6 +144,10 @@ func (s *Scheduler) Start(name string) error {
 // the monitorProcess goroutine: Stop creates mp.doneCh while holding the write
 // lock, monitorProcess closes it after cmd.Wait() returns and the state is set.
 //
+// When the process is in StateRestarting, Stop cancels the pending backoff by
+// closing mp.restartCancelCh and immediately transitions to Stopped without
+// sending any signal (the OS process is already dead at that point).
+//
 // Returns ErrNotFound if the process is not registered.
 // Returns ErrNotRunning if the process is Stopped, Idle, or Failed.
 // Returns a descriptive error if the process is in Starting or Stopping state.
@@ -151,7 +163,22 @@ func (s *Scheduler) Stop(name string) error {
 	// Validate state allows stopping.
 	switch mp.State {
 	case StateRunning:
-		// allowed — proceed
+		// allowed — proceed with signal path below
+	case StateRestarting:
+		// Phase 8: process is in backoff wait — cancel the restart and stop cleanly.
+		transition(mp, StateStopping)  //nolint:errcheck — Restarting → Stopping is valid
+		cancelCh := mp.restartCancelCh // capture before releasing lock
+		mp.restartCancelCh = nil
+		mp.StoppedAt = time.Now()
+		transition(mp, StateStopped) //nolint:errcheck — Stopping → Stopped is valid
+		s.mu.Unlock()
+		// Close the cancel channel to unblock the waitAndRestart goroutine.
+		// Closing is safe here: we set mp.restartCancelCh = nil above so no
+		// other caller will try to close or send on this channel again.
+		if cancelCh != nil {
+			close(cancelCh)
+		}
+		return nil
 	case StateStopped, StateIdle, StateFailed:
 		s.mu.Unlock()
 		return fmt.Errorf("%w: %s (state: %s)", ErrNotRunning, name, mp.State)
@@ -229,10 +256,11 @@ func captureOutput(lb *logBuffer, r io.ReadCloser, stream Stream) {
 
 // monitorProcess blocks on cmd.Wait() until the process exits (and all pipe
 // goroutines have finished draining output), then transitions the process to
-// Stopped or Failed and closes mp.doneCh to unblock a pending Stop() call.
+// Stopped, Failed, or Restarting depending on the restart policy.
 //
 // monitorProcess is the single authority for terminal state transitions. Only
-// Stop() writes Stopping, and only monitorProcess transitions from there to Stopped.
+// Stop() writes Stopping, and only monitorProcess transitions from Running to a
+// terminal or Restarting state.
 func monitorProcess(s *Scheduler, mp *ManagedProcess, cmd *exec.Cmd) {
 	// cmd.Wait() blocks until the process exits AND all pipe goroutines complete.
 	// This ensures all output is captured in mp.logs before we update state.
@@ -254,6 +282,44 @@ func monitorProcess(s *Scheduler, mp *ManagedProcess, cmd *exec.Cmd) {
 	if mp.State == StateStopping {
 		// Stop() requested — transition to Stopped regardless of exit code.
 		transition(mp, StateStopped) //nolint:errcheck
+
+		// Signal Stop() that the process has fully exited.
+		if mp.doneCh != nil {
+			close(mp.doneCh)
+			mp.doneCh = nil
+		}
+		return
+	}
+
+	// Check whether the restart policy calls for a restart.
+	policy := mp.Def.RestartPolicy
+	shouldRestart := false
+	switch policy.Mode {
+	case RestartAlways:
+		shouldRestart = true
+	case RestartOnFailure:
+		shouldRestart = (err != nil || code != 0)
+	default:
+		// RestartNever or unset — no automatic restart.
+		shouldRestart = false
+	}
+
+	if shouldRestart {
+		// Check retries budget: MaxRetries == 0 means unlimited.
+		withinBudget := (policy.MaxRetries == 0) || (mp.RestartCount < policy.MaxRetries)
+		if withinBudget {
+			mp.RestartCount++
+			transition(mp, StateRestarting) //nolint:errcheck — Running → Restarting is valid
+			go waitAndRestart(s, mp)
+			return
+		}
+		// Budget exhausted — fall through to StateFailed below.
+	}
+
+	// No restart, or budget exhausted.
+	if shouldRestart && policy.MaxRetries > 0 && mp.RestartCount >= policy.MaxRetries {
+		// Max retries exhausted.
+		transition(mp, StateFailed) //nolint:errcheck
 	} else if err == nil || code == 0 {
 		// Natural clean exit.
 		transition(mp, StateStopped) //nolint:errcheck
