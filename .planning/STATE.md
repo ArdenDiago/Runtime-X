@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
 status: planning
-stopped_at: Completed 08-01-PLAN.md (StateRestarting FSM, RestartPolicy backoff fields, restartCancelCh — all 37 tests pass with -race)
-last_updated: "2026-03-06T08:58:53.278Z"
+stopped_at: Completed 08-02-PLAN.md (waitAndRestart exponential backoff, monitorProcess restart policy, Stop() cancellation — all 41 tests pass with -race)
+last_updated: "2026-03-06T09:03:12.907Z"
 last_activity: 2026-03-05 — Phase 8 planning complete (08-01, 08-02 plans created).
 progress:
-  total_phases: 8
-  completed_phases: 4
+  total_phases: 11
+  completed_phases: 5
   total_plans: 15
-  completed_plans: 8
-  percent: 53
+  completed_plans: 9
+  percent: 60
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 7: Dependency Ordering
+**Current focus:** v1.1 — Phase 8: Restart Policies (COMPLETE)
 
 ## Current Position
 
-Phase: 8 of 11 (Restart Policies)
-Plan: 2 of 2 complete (Phase 8 PLANNING COMPLETE)
-Status: Phase 8 planning complete — awaiting execution. Next up: Phase 9 planning.
-Last activity: 2026-03-05 — Phase 8 planning complete (08-01, 08-02 plans created).
+Phase: 8 of 11 (Restart Policies) — COMPLETE
+Plan: 2 of 2 complete (Phase 8 EXECUTION COMPLETE)
+Status: Phase 8 complete — exponential-backoff restart engine with cancellation. Next up: Phase 9 (REST API).
+Last activity: 2026-03-06 — Phase 8 execution complete (08-01 types/FSM, 08-02 restart logic — 41 tests pass with -race).
 
-Progress: [█████░░░░░] 53%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [█████░░░░░] 53%
 | Phase 07-dependency-ordering P01 | 2 | 2 tasks | 4 files |
 | Phase 07-dependency-ordering P02 | 3 | 2 tasks | 3 files |
 | Phase 08-restart-policies P01 | 8 | 4 tasks | 2 files |
+| Phase 08-restart-policies P02 | 18 | 4 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ Phase 6 plan 01 decisions:
 - [Phase 08-restart-policies]: [08-01 arch]: StateRestarting placed after StateFailed in iota — existing numeric values unchanged
 - [Phase 08-restart-policies]: [08-01 arch]: BackoffFactor zero-value defaults to 2.0 at runtime in restart loop (08-02), not at struct level — keeps zero-value RestartPolicy meaningful
 - [Phase 08-restart-policies]: [08-01 arch]: restartCancelCh added to ManagedProcess — closed by Stop() to interrupt backoff sleep, same close-to-cancel pattern as doneCh
+- [Phase 08-restart-policies]: [08-02 arch]: Start() must allow StateRestarting — waitAndRestart goroutine calls s.Start() directly, FSM has Restarting->Starting as valid edge
+- [Phase 08-restart-policies]: [08-02 impl]: calcDelay uses exponent = RestartCount-1 so first delay = Delay * factor^0 = Delay (no inflation on first retry)
+- [Phase 08-restart-policies]: [08-02 arch]: Stop() in StateRestarting closes restartCancelCh and returns immediately — process is already dead, no SIGTERM needed
 
 ### Pending Todos
 
@@ -114,7 +118,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-06T08:58:53.276Z
-Stopped at: Completed 08-01-PLAN.md (StateRestarting FSM, RestartPolicy backoff fields, restartCancelCh — all 37 tests pass with -race)
+Last session: 2026-03-06T09:03:12.905Z
+Stopped at: Completed 08-02-PLAN.md (waitAndRestart exponential backoff, monitorProcess restart policy, Stop() cancellation — all 41 tests pass with -race)
 Resume file: None
-Next: Execute Phase 8 — Restart Policy
+Next: Plan and Execute Phase 9 — REST API

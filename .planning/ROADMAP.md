@@ -24,7 +24,7 @@
 - [x] **Phase 5: Scheduler Data Structures and Log Buffer** — Define core types and mutex-safe ring buffer that all later scheduler logic depends on (completed 2026-03-01)
 - [x] **Phase 6: Scheduler Start, Stop, and Lifecycle** — Implement the core process lifecycle methods on a race-free foundation (completed 2026-03-02)
 - [x] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator (completed 2026-03-02)
-- [ ] **Phase 8: Restart Policies** — Add exponential backoff restart with cancellable goroutines as the second v1.1 differentiator
+- [x] **Phase 8: Restart Policies** — Add exponential backoff restart with cancellable goroutines as the second v1.1 differentiator (completed 2026-03-06)
 - [ ] **Phase 9: REST API** — Expose the full scheduler as a thin HTTP adapter with CORS support
 - [ ] **Phase 10: CLI serve and Graceful Shutdown** — Wire everything into `rtx serve` with clean signal handling
 - [ ] **Phase 11: React Frontend** — Deliver the browser-based process management UI
@@ -97,7 +97,7 @@ Plans:
   3. Restart delays grow exponentially (e.g., 1s, 2s, 4s, 8s) and are capped at the configured max delay
   4. After reaching max retries the process status becomes failed and no further restart is attempted
   5. Calling stop on a process that is waiting in a backoff delay cancels the pending restart immediately
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 08-01-PLAN.md — Types and FSM updates (SCH-04, RST-02, RST-04)
 - [ ] 08-02-PLAN.md — Restart logic and integration (RST-01, RST-02, RST-03, RST-04)
@@ -156,7 +156,7 @@ Plans:
 | 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete    | 2026-03-01 | - |
 | 6. Scheduler Start, Stop, and Lifecycle | 2/2 | Complete   | 2026-03-02 | - |
 | 7. Dependency Ordering | 2/2 | Complete   | 2026-03-02 | - |
-| 8. Restart Policies | 1/2 | In Progress|  | - |
+| 8. Restart Policies | 2/2 | Complete   | 2026-03-06 | - |
 | 9. REST API | v1.1 | 0/TBD | Not started | - |
 | 10. CLI serve and Graceful Shutdown | v1.1 | 2/2 | Not started | - |
 | 11. React Frontend | v1.1 | 2/2 | Not started | - |
