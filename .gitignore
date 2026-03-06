@@ -26,3 +26,7 @@ Thumbs.db
 # Match the root-level rtx binary but not the cmd/rtx/ source directory.
 /rtx
 bin/
+
+# Node / frontend
+web/node_modules/
+web/dist/
