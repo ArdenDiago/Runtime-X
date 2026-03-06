@@ -22,24 +22,27 @@ type restartPolicyJSON struct {
 // processJSON is the JSON representation of a ProcessDef / ManagedProcess.
 // Durations are expressed in seconds (float64) for API compatibility.
 type processJSON struct {
-	Name          string            `json:"name"`
-	Command       string            `json:"command"`
-	Args          []string          `json:"args,omitempty"`
-	Env           []string          `json:"env,omitempty"`
-	WorkDir       string            `json:"work_dir,omitempty"`
-	RestartPolicy restartPolicyJSON `json:"restart_policy"`
-	DependsOn     []string          `json:"depends_on,omitempty"`
-	LogBufferSize int               `json:"log_buffer_size,omitempty"`
-	StopTimeoutSecs float64         `json:"stop_timeout_secs,omitempty"`
+	Name            string            `json:"name"`
+	Command         string            `json:"command"`
+	Args            []string          `json:"args,omitempty"`
+	Env             []string          `json:"env,omitempty"`
+	WorkDir         string            `json:"work_dir,omitempty"`
+	RestartPolicy   restartPolicyJSON `json:"restart_policy"`
+	DependsOn       []string          `json:"depends_on,omitempty"`
+	LogBufferSize   int               `json:"log_buffer_size,omitempty"`
+	StopTimeoutSecs float64           `json:"stop_timeout_secs,omitempty"`
 
 	// Runtime fields — present in GET responses only.
 	State        string `json:"state,omitempty"`
 	RestartCount int    `json:"restart_count,omitempty"`
 }
 
-// toProcessJSON converts a ManagedProcess into its JSON representation.
-func toProcessJSON(mp *scheduler.ManagedProcess) processJSON {
-	def := mp.Def
+// snapshotToJSON converts a ProcessSnapshot (safe value copy) into its JSON
+// representation. Using a snapshot avoids data races with the monitor goroutine
+// that may concurrently write to the live ManagedProcess after scheduler methods
+// like Start() return.
+func snapshotToJSON(snap scheduler.ProcessSnapshot) processJSON {
+	def := snap.Def
 	return processJSON{
 		Name:    def.Name,
 		Command: def.Command,
@@ -56,8 +59,8 @@ func toProcessJSON(mp *scheduler.ManagedProcess) processJSON {
 		DependsOn:       def.DependsOn,
 		LogBufferSize:   def.LogBufferSize,
 		StopTimeoutSecs: def.StopTimeout.Seconds(),
-		State:           mp.State.String(),
-		RestartCount:    mp.RestartCount,
+		State:           snap.State.String(),
+		RestartCount:    snap.RestartCount,
 	}
 }
 
@@ -84,11 +87,12 @@ func fromProcessJSON(p processJSON) scheduler.ProcessDef {
 
 // ListProcesses handles GET /api/processes.
 // Returns a JSON array of all registered processes with their current state.
+// Uses SnapshotAll() to ensure race-safe reads of live state fields.
 func (s *Server) ListProcesses(w http.ResponseWriter, r *http.Request) {
-	procs := s.Scheduler.List()
-	out := make([]processJSON, 0, len(procs))
-	for _, mp := range procs {
-		out = append(out, toProcessJSON(mp))
+	snaps := s.Scheduler.SnapshotAll()
+	out := make([]processJSON, 0, len(snaps))
+	for _, snap := range snaps {
+		out = append(out, snapshotToJSON(snap))
 	}
 	send(w, http.StatusOK, out, nil)
 }
@@ -113,15 +117,15 @@ func (s *Server) CreateProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mp, _ := s.Scheduler.Get(def.Name)
-	send(w, http.StatusCreated, toProcessJSON(mp), nil)
+	snap, _ := s.Scheduler.Snapshot(def.Name)
+	send(w, http.StatusCreated, snapshotToJSON(snap), nil)
 }
 
 // GetProcess handles GET /api/processes/{name}.
 // Returns the process definition and current runtime state, or 404 if not found.
 func (s *Server) GetProcess(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	mp, err := s.Scheduler.Get(name)
+	snap, err := s.Scheduler.Snapshot(name)
 	if err != nil {
 		if errors.Is(err, scheduler.ErrNotFound) {
 			send(w, http.StatusNotFound, nil, err)
@@ -130,7 +134,7 @@ func (s *Server) GetProcess(w http.ResponseWriter, r *http.Request) {
 		send(w, http.StatusInternalServerError, nil, err)
 		return
 	}
-	send(w, http.StatusOK, toProcessJSON(mp), nil)
+	send(w, http.StatusOK, snapshotToJSON(snap), nil)
 }
 
 // UpdateProcess handles PUT /api/processes/{name}.
@@ -139,8 +143,8 @@ func (s *Server) GetProcess(w http.ResponseWriter, r *http.Request) {
 func (s *Server) UpdateProcess(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	// Verify the process exists first.
-	mp, err := s.Scheduler.Get(name)
+	// Verify the process exists and is in a stoppable state.
+	snap, err := s.Scheduler.Snapshot(name)
 	if err != nil {
 		if errors.Is(err, scheduler.ErrNotFound) {
 			send(w, http.StatusNotFound, nil, err)
@@ -151,7 +155,7 @@ func (s *Server) UpdateProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process must be stopped (Idle, Stopped, or Failed) before updating.
-	switch mp.State {
+	switch snap.State {
 	case scheduler.StateIdle, scheduler.StateStopped, scheduler.StateFailed:
 		// allowed — proceed
 	default:
@@ -179,8 +183,8 @@ func (s *Server) UpdateProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, _ := s.Scheduler.Get(name)
-	send(w, http.StatusOK, toProcessJSON(updated), nil)
+	updated, _ := s.Scheduler.Snapshot(name)
+	send(w, http.StatusOK, snapshotToJSON(updated), nil)
 }
 
 // DeleteProcess handles DELETE /api/processes/{name}.
@@ -205,6 +209,7 @@ func (s *Server) DeleteProcess(w http.ResponseWriter, r *http.Request) {
 
 // StartProcess handles POST /api/processes/{name}/start.
 // Starts the named process. Returns 404 if not found, 409 if already running.
+// Uses Snapshot() after Start() for a race-safe state read.
 func (s *Server) StartProcess(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if err := s.Scheduler.Start(name); err != nil {
@@ -219,12 +224,13 @@ func (s *Server) StartProcess(w http.ResponseWriter, r *http.Request) {
 		send(w, http.StatusInternalServerError, nil, err)
 		return
 	}
-	mp, _ := s.Scheduler.Get(name)
-	send(w, http.StatusAccepted, toProcessJSON(mp), nil)
+	snap, _ := s.Scheduler.Snapshot(name)
+	send(w, http.StatusAccepted, snapshotToJSON(snap), nil)
 }
 
 // StopProcess handles POST /api/processes/{name}/stop.
 // Stops the named process. Returns 404 if not found, 409 if already stopped.
+// Uses Snapshot() after Stop() for a race-safe state read.
 func (s *Server) StopProcess(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if err := s.Scheduler.Stop(name); err != nil {
@@ -239,8 +245,8 @@ func (s *Server) StopProcess(w http.ResponseWriter, r *http.Request) {
 		send(w, http.StatusInternalServerError, nil, err)
 		return
 	}
-	mp, _ := s.Scheduler.Get(name)
-	send(w, http.StatusOK, toProcessJSON(mp), nil)
+	snap, _ := s.Scheduler.Snapshot(name)
+	send(w, http.StatusOK, snapshotToJSON(snap), nil)
 }
 
 // logEntryJSON is the JSON representation of a scheduler.LogEntry.

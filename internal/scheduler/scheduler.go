@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sync"
+	"time"
 )
 
 // validName matches the required process name format: a lowercase alphanumeric
@@ -158,6 +159,63 @@ func (s *Scheduler) Logs(name string) ([]LogEntry, error) {
 	// The log buffer has its own independent mutex, so this call is safe
 	// without holding the scheduler lock.
 	return mp.logs.Lines(), nil
+}
+
+// ProcessSnapshot is a point-in-time copy of a ManagedProcess's observable fields.
+// All fields are value types — no pointers into the live scheduler state — so the
+// snapshot is safe to read after the scheduler lock has been released.
+type ProcessSnapshot struct {
+	Def          ProcessDef
+	State        State
+	StartedAt    time.Time
+	StoppedAt    time.Time
+	ExitCode     int
+	RestartCount int
+}
+
+// Snapshot returns a race-safe copy of the named process's state under the read
+// lock. Unlike Get(), the returned struct contains no pointers into the live
+// scheduler state, so callers may read it after the lock is released without
+// data races with the monitor goroutine.
+//
+// Returns ErrNotFound if no process with the given name is registered.
+func (s *Scheduler) Snapshot(name string) (ProcessSnapshot, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	mp, exists := s.processes[name]
+	if !exists {
+		return ProcessSnapshot{}, fmt.Errorf("%w: %s", ErrNotFound, name)
+	}
+	return ProcessSnapshot{
+		Def:          mp.Def,
+		State:        mp.State,
+		StartedAt:    mp.StartedAt,
+		StoppedAt:    mp.StoppedAt,
+		ExitCode:     mp.ExitCode,
+		RestartCount: mp.RestartCount,
+	}, nil
+}
+
+// SnapshotAll returns a point-in-time slice of ProcessSnapshot for every
+// registered process. Like Snapshot(), all values are safe to read without
+// holding the lock after this call returns.
+func (s *Scheduler) SnapshotAll() []ProcessSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make([]ProcessSnapshot, 0, len(s.processes))
+	for _, mp := range s.processes {
+		out = append(out, ProcessSnapshot{
+			Def:          mp.Def,
+			State:        mp.State,
+			StartedAt:    mp.StartedAt,
+			StoppedAt:    mp.StoppedAt,
+			ExitCode:     mp.ExitCode,
+			RestartCount: mp.RestartCount,
+		})
+	}
+	return out
 }
 
 // validateName returns a descriptive error if name does not satisfy the slug format.
