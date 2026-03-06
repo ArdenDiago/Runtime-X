@@ -158,5 +158,5 @@ Plans:
 | 7. Dependency Ordering | 2/2 | Complete   | 2026-03-02 | - |
 | 8. Restart Policies | 2/2 | Complete   | 2026-03-06 | - |
 | 9. REST API | 1/2 | In Progress|  | - |
-| 10. CLI serve and Graceful Shutdown | v1.1 | 2/2 | Not started | - |
+| 10. CLI serve and Graceful Shutdown | 1/2 | In Progress|  | - |
 | 11. React Frontend | v1.1 | 2/2 | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
 status: completed
-stopped_at: Completed 09-02-PLAN.md (all 8 REST API handlers + CORS, 21 handler tests pass with -race, ProcessSnapshot race fix)
-last_updated: "2026-03-06T09:39:47.193Z"
+stopped_at: Completed 10-01-PLAN.md (rtx serve with static file serving, cmdRun isolation, 2 tasks complete)
+last_updated: "2026-03-06T09:44:12.309Z"
 last_activity: 2026-03-06 — Phase 9-02 execution complete (resource/lifecycle/log handlers, ProcessSnapshot race fix, 21 tests pass with -race).
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 67
 ---
 
@@ -57,6 +57,7 @@ Progress: [███████░░░] 67%
 | Phase 08-restart-policies P02 | 18 | 4 tasks | 3 files |
 | Phase 09-REST-API P01 | 3 | 3 tasks | 4 files |
 | Phase 09-REST-API P02 | 10 | 3 tasks | 3 files |
+| Phase 10-cli-serve-and-graceful-shutdown P01 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,9 @@ Phase 6 plan 01 decisions:
 - [Phase 09-REST-API]: [09-01 arch]: send() writes Content-Type then WriteHeader then encodes; CORS middleware wraps entire mux at Routes() level; UpdateProcess uses Remove+Register cycle; fromProcessJSON ignores body.Name for PUT
 - [Phase 09-REST-API]: ProcessSnapshot value type: handlers use Snapshot()/SnapshotAll() instead of Get()/List() to prevent DATA RACE with monitorProcess goroutine
 - [Phase 09-REST-API]: 202 Accepted for StartProcess (async) — UpdateProcess uses Remove+Register pattern — logsEnvelope includes process name field
+- [Phase 10-01]: http.FileServer(http.Dir('web/dist')) for static serving — relative to process working directory; sufficient for v1.1 development workflow
+- [Phase 10-01]: Top-level mux: /api/ routes to srv.Routes() (CORS-wrapped), / to FileServer — single mux, no prefix stripping
+- [Phase 10-01]: flag.NewFlagSet per subcommand for clean flag isolation and per-subcommand usage output
 
 ### Pending Todos
 
@@ -123,7 +127,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-06T09:36:00.102Z
-Stopped at: Completed 09-02-PLAN.md (all 8 REST API handlers + CORS, 21 handler tests pass with -race, ProcessSnapshot race fix)
+Last session: 2026-03-06T09:44:12.307Z
+Stopped at: Completed 10-01-PLAN.md (rtx serve with static file serving, cmdRun isolation, 2 tasks complete)
 Resume file: None
 Next: Plan and Execute Phase 9 — REST API
