@@ -281,8 +281,12 @@ func TestStateTransitions(t *testing.T) {
 		{StateStarting, StateRunning},
 		{StateStarting, StateFailed},
 		{StateRunning, StateStopping},
-		{StateRunning, StateStopped}, // natural clean exit (exit code 0)
-		{StateRunning, StateFailed},
+		{StateRunning, StateStopped},    // natural clean exit (exit code 0)
+		{StateRunning, StateFailed},     // crash
+		{StateRunning, StateRestarting}, // restart policy triggers backoff
+		{StateRestarting, StateStarting},  // backoff elapsed — spawn next attempt
+		{StateRestarting, StateStopping},  // Stop() interrupts pending restart
+		{StateRestarting, StateFailed},    // MaxRetries exhausted
 		{StateStopping, StateStopped},
 		{StateStopping, StateFailed},
 		{StateStopped, StateStarting},
@@ -300,6 +304,9 @@ func TestStateTransitions(t *testing.T) {
 		{StateRunning, StateStarting},
 		{StateStopped, StateIdle},
 		{StateStopped, StateFailed},
+		{StateRestarting, StateIdle},    // no jumping back to idle
+		{StateRestarting, StateRunning}, // must go through Starting first
+		{StateRestarting, StateStopped}, // cannot transition directly to Stopped
 	}
 
 	t.Run("valid transitions succeed", func(t *testing.T) {
@@ -357,6 +364,7 @@ func TestStateString(t *testing.T) {
 		{StateStopping, "stopping"},
 		{StateStopped, "stopped"},
 		{StateFailed, "failed"},
+		{StateRestarting, "restarting"},
 	}
 
 	for _, tc := range cases {

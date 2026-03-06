@@ -25,8 +25,14 @@ type RestartPolicy struct {
 	Mode RestartMode
 	// MaxRetries limits the number of restart attempts (0 = unlimited when Mode is RestartAlways).
 	MaxRetries int
-	// Delay is the pause between restart attempts.
+	// Delay is the initial pause between restart attempts.
 	Delay time.Duration
+	// MaxDelay caps the exponential backoff delay so it does not grow unboundedly.
+	// A zero value means no cap is applied.
+	MaxDelay time.Duration
+	// BackoffFactor is the multiplier applied to Delay after each restart attempt.
+	// A zero value defaults to 2.0 (exponential doubling).
+	BackoffFactor float64
 }
 
 // ProcessDef is the immutable definition of a process to be managed.
@@ -73,6 +79,9 @@ const (
 	StateStopped
 	// StateFailed means the process exited with a non-zero code or crashed.
 	StateFailed
+	// StateRestarting means the process exited and is waiting through the backoff
+	// delay before the next automatic restart attempt.
+	StateRestarting
 )
 
 // String returns the lowercase name of the state for display and error messages.
@@ -90,6 +99,8 @@ func (s State) String() string {
 		return "stopped"
 	case StateFailed:
 		return "failed"
+	case StateRestarting:
+		return "restarting"
 	default:
 		return "unknown"
 	}
@@ -105,11 +116,16 @@ var validTransitions = map[State][]State{
 	StateIdle:     {StateStarting},
 	StateStarting: {StateRunning, StateFailed},
 	// StateRunning allows → StateStopped for natural clean exit (exit code 0),
-	// → StateStopping when Stop() sends a signal, and → StateFailed for crashes.
-	StateRunning:  {StateStopping, StateStopped, StateFailed},
-	StateStopping: {StateStopped, StateFailed},
-	StateStopped:  {StateStarting}, // allows restart
-	StateFailed:   {StateStarting}, // allows retry
+	// → StateStopping when Stop() sends a signal, → StateFailed for crashes,
+	// and → StateRestarting when a restart policy triggers a backoff delay.
+	StateRunning: {StateStopping, StateStopped, StateFailed, StateRestarting},
+	// StateRestarting allows → StateStarting after the backoff delay elapses,
+	// → StateStopping when Stop() interrupts the pending restart,
+	// and → StateFailed when MaxRetries is exhausted.
+	StateRestarting: {StateStarting, StateStopping, StateFailed},
+	StateStopping:   {StateStopped, StateFailed},
+	StateStopped:    {StateStarting}, // allows restart
+	StateFailed:     {StateStarting}, // allows retry
 }
 
 // canTransition reports whether the FSM permits moving from → to.
@@ -162,4 +178,10 @@ type ManagedProcess struct {
 	cmd *exec.Cmd
 	// doneCh is nil unless Stop() is pending; closed by the monitor goroutine on exit.
 	doneCh chan struct{}
+
+	// Phase 8 runtime fields.
+	// restartCancelCh is created when the process enters StateRestarting and closed
+	// by Stop() to interrupt any pending backoff sleep, causing the restart loop to
+	// exit cleanly instead of spawning a new process.
+	restartCancelCh chan struct{}
 }
