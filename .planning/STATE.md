@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
 status: completed
-stopped_at: Completed 08-02-PLAN.md (waitAndRestart exponential backoff, monitorProcess restart policy, Stop() cancellation — all 41 tests pass with -race)
-last_updated: "2026-03-06T09:08:28.037Z"
-last_activity: 2026-03-06 — Phase 8 execution complete (08-01 types/FSM, 08-02 restart logic — 41 tests pass with -race).
+stopped_at: "Completed 09-01-PLAN.md (API foundation: internal/api package with 8 REST endpoints, CORS middleware, JSON envelope, 7 tests pass with -race)"
+last_updated: "2026-03-06T09:26:58.245Z"
+last_activity: 2026-03-06 — Phase 9-01 execution complete (internal/api package: 8 REST endpoints, CORS, JSON envelope, 48 tests pass with -race).
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 15
-  completed_plans: 9
-  percent: 60
+  completed_plans: 10
+  percent: 67
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 8: Restart Policies (COMPLETE)
+**Current focus:** v1.1 — Phase 9: REST API (In Progress)
 
 ## Current Position
 
-Phase: 8 of 11 (Restart Policies) — COMPLETE
-Plan: 2 of 2 complete (Phase 8 EXECUTION COMPLETE)
-Status: Phase 8 complete — exponential-backoff restart engine with cancellation. Next up: Phase 9 (REST API).
-Last activity: 2026-03-06 — Phase 8 execution complete (08-01 types/FSM, 08-02 restart logic — 41 tests pass with -race).
+Phase: 9 of 11 (REST API) — IN PROGRESS
+Plan: 1 of 2 complete (09-01 API Foundation done — 8 endpoints, CORS, JSON envelope, 48 tests pass with -race)
+Status: Phase 9 in progress — API foundation complete. Next: Phase 09-02 (additional handler tests).
+Last activity: 2026-03-06 — Phase 9-01 execution complete (internal/api package with 8 REST endpoints, CORS, JSON envelope, 7 tests pass with -race).
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [██████░░░░] 60%
 | Phase 07-dependency-ordering P02 | 3 | 2 tasks | 3 files |
 | Phase 08-restart-policies P01 | 8 | 4 tasks | 2 files |
 | Phase 08-restart-policies P02 | 18 | 4 tasks | 3 files |
+| Phase 09-REST-API P01 | 3 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,7 @@ Phase 6 plan 01 decisions:
 - [Phase 08-restart-policies]: [08-02 arch]: Start() must allow StateRestarting — waitAndRestart goroutine calls s.Start() directly, FSM has Restarting->Starting as valid edge
 - [Phase 08-restart-policies]: [08-02 impl]: calcDelay uses exponent = RestartCount-1 so first delay = Delay * factor^0 = Delay (no inflation on first retry)
 - [Phase 08-restart-policies]: [08-02 arch]: Stop() in StateRestarting closes restartCancelCh and returns immediately — process is already dead, no SIGTERM needed
+- [Phase 09-REST-API]: [09-01 arch]: send() writes Content-Type then WriteHeader then encodes; CORS middleware wraps entire mux at Routes() level; UpdateProcess uses Remove+Register cycle; fromProcessJSON ignores body.Name for PUT
 
 ### Pending Todos
 
@@ -118,7 +120,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-06T09:03:12.905Z
-Stopped at: Completed 08-02-PLAN.md (waitAndRestart exponential backoff, monitorProcess restart policy, Stop() cancellation — all 41 tests pass with -race)
+Last session: 2026-03-06T09:26:58.243Z
+Stopped at: Completed 09-01-PLAN.md (API foundation: internal/api package with 8 REST endpoints, CORS middleware, JSON envelope, 7 tests pass with -race)
 Resume file: None
 Next: Plan and Execute Phase 9 — REST API

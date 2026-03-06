@@ -124,7 +124,7 @@ Plans:
   2. `rtx run <command>` still works as the v1.0 single-process runner (backwards compatible)
   3. Pressing Ctrl+C causes the server to stop all managed processes and exit within 10 seconds
   4. After Ctrl+C, `ps aux` shows no orphaned child processes that were managed by rtx
-**Plans:** 2/2 plans complete
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 10-01-PLAN.md — Refactor main.go for subcommands and implement rtx serve
 - [ ] 10-02-PLAN.md — Implement StopAll() and graceful shutdown orchestration
@@ -157,6 +157,6 @@ Plans:
 | 6. Scheduler Start, Stop, and Lifecycle | 2/2 | Complete   | 2026-03-02 | - |
 | 7. Dependency Ordering | 2/2 | Complete   | 2026-03-02 | - |
 | 8. Restart Policies | 2/2 | Complete   | 2026-03-06 | - |
-| 9. REST API | v1.1 | 0/TBD | Not started | - |
+| 9. REST API | 1/2 | In Progress|  | - |
 | 10. CLI serve and Graceful Shutdown | v1.1 | 2/2 | Not started | - |
 | 11. React Frontend | v1.1 | 2/2 | Not started | - |
