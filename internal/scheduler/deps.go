@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -212,4 +213,42 @@ func waitRunning(s *Scheduler, name string, timeout time.Duration) error {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return fmt.Errorf("process %q did not reach Running within %v", name, timeout)
+}
+
+// StopAll stops all processes that are in StateRunning, StateStarting, or
+// StateRestarting. Each eligible process is stopped in its own goroutine so
+// that all Stop() calls (including their per-process SIGTERM→SIGKILL escalation
+// and timeout logic) execute concurrently. StopAll blocks until every goroutine
+// completes.
+//
+// Processes already in terminal states (Idle, Stopped, Failed, Stopping) are
+// skipped — Stop() would return ErrNotRunning for them anyway.
+//
+// StopAll is safe to call from signal handlers and shutdown paths. It does not
+// return errors: individual Stop() failures (e.g. ErrNotRunning on a race)
+// are silently ignored because the goal is best-effort parallel shutdown.
+func (s *Scheduler) StopAll() {
+	// Snapshot the list of names to stop under the read lock so we don't hold
+	// it for the duration of the Stop() calls (which can block for StopTimeout).
+	s.mu.RLock()
+	var toStop []string
+	for name, mp := range s.processes {
+		switch mp.State {
+		case StateRunning, StateStarting, StateRestarting:
+			toStop = append(toStop, name)
+		}
+	}
+	s.mu.RUnlock()
+
+	var wg sync.WaitGroup
+	for _, name := range toStop {
+		wg.Add(1)
+		go func(n string) {
+			defer wg.Done()
+			// Ignore errors — a race between snapshot and Stop() may yield
+			// ErrNotRunning if the process exited naturally in the interim.
+			_ = s.Stop(n)
+		}(name)
+	}
+	wg.Wait()
 }

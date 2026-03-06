@@ -765,6 +765,77 @@ func TestStopDuringRestart(t *testing.T) {
 	}
 }
 
+// TestStopAll verifies that StopAll() stops all Running/Starting/Restarting
+// processes in parallel and leaves them in a terminal state (Stopped or Failed).
+func TestStopAll(t *testing.T) {
+	s := New()
+
+	// Register multiple long-running processes.
+	names := []string{"stopper-a", "stopper-b", "stopper-c"}
+	for _, name := range names {
+		if err := s.Register(ProcessDef{Name: name, Command: "sleep", Args: []string{"60"}}); err != nil {
+			t.Fatalf("Register %s: %v", name, err)
+		}
+	}
+
+	// Cleanup — SIGKILL any stragglers if the test fails before StopAll returns.
+	t.Cleanup(func() {
+		for _, name := range names {
+			killProcess(t, s, name)
+		}
+	})
+
+	// Start all processes.
+	for _, name := range names {
+		if err := s.Start(name); err != nil {
+			t.Fatalf("Start %s: %v", name, err)
+		}
+	}
+
+	// Wait for all processes to reach Running.
+	for _, name := range names {
+		waitForState(t, s, name, StateRunning, 2*time.Second)
+	}
+
+	// StopAll must stop all of them.
+	s.StopAll()
+
+	// Verify all are in terminal state.
+	for _, name := range names {
+		state, ok := getState(s, name)
+		if !ok {
+			t.Errorf("process %q not found after StopAll", name)
+			continue
+		}
+		if state != StateStopped && state != StateFailed {
+			t.Errorf("process %q: state = %v, want Stopped or Failed", name, state)
+		}
+	}
+
+	// Verify no child processes remain alive (best-effort check via PID).
+	for _, name := range names {
+		pid := getPID(s, name)
+		if pid <= 0 {
+			continue // process was never started or PID cleared
+		}
+		// Check if process is still alive by sending signal 0.
+		if err := syscall.Kill(pid, 0); err == nil {
+			t.Errorf("process %q (PID %d) still alive after StopAll", name, pid)
+		}
+	}
+}
+
+// TestStopAll_AlreadyStopped verifies that StopAll() is a no-op when no
+// processes are running, and completes without blocking or panicking.
+func TestStopAll_AlreadyStopped(t *testing.T) {
+	s := New()
+	if err := s.Register(ProcessDef{Name: "idle-proc", Command: "echo", Args: []string{"hi"}}); err != nil {
+		t.Fatal(err)
+	}
+	// Process is idle — StopAll should be a quick no-op.
+	s.StopAll() // must not block or panic
+}
+
 // contains is a simple substring check helper.
 func contains(s, sub string) bool {
 	if len(sub) == 0 {
