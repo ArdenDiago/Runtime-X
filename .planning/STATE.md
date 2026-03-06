@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
 status: completed
-stopped_at: Completed 10-02-PLAN.md (StopAll + signal handling, graceful shutdown in rtx serve)
-last_updated: "2026-03-06T09:52:13.487Z"
-last_activity: 2026-03-06 — Phase 9-02 execution complete (resource/lifecycle/log handlers, ProcessSnapshot race fix, 21 tests pass with -race).
+stopped_at: Completed 11-01-PLAN.md (React scaffold, API client, ProcessList, ProcessForm, LogViewer)
+last_updated: "2026-03-06T14:05:14.914Z"
+last_activity: 2026-03-06 — Phase 11-01 execution complete (React scaffold, API client, ProcessList/Form/LogViewer, npm run build succeeds).
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 15
-  completed_plans: 13
-  percent: 67
+  completed_plans: 14
+  percent: 93
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 ## Current Position
 
-Phase: 10 of 11 (CLI Serve & Graceful Shutdown) — COMPLETE
-Plan: 2 of 2 complete (Phase 10 EXECUTION COMPLETE)
-Status: Phase 10 complete — rtx serve with SIGINT/SIGTERM handling, http.Server.Shutdown drain, scheduler.StopAll() parallel shutdown. Next: Phase 11 (React frontend).
-Last activity: 2026-03-06 — Phase 10-02 execution complete (StopAll + signal handling, graceful shutdown in rtx serve, .gitignore fix).
+Phase: 11 of 11 (React Frontend) — IN PROGRESS
+Plan: 1 of 2 complete
+Status: Phase 11-01 complete — React 19 + Vite 7 dashboard with ProcessList (2s polling), ProcessForm, LogViewer. npm run build succeeds.
+Last activity: 2026-03-06 — Phase 11-01 execution complete (React scaffold, API client, ProcessList, ProcessForm, LogViewer).
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█████████░] 87%
 | Phase 09-REST-API P02 | 10 | 3 tasks | 3 files |
 | Phase 10-cli-serve-and-graceful-shutdown P01 | 4 | 2 tasks | 3 files |
 | Phase 10-cli-serve-and-graceful-shutdown P02 | 9 | 2 tasks | 4 files |
+| Phase 11-react-frontend P01 | 11 | 4 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,7 @@ Phase 6 plan 01 decisions:
 - [Phase 10-02]: StopAll silently ignores ErrNotRunning races from snapshot-to-stop window
 - [Phase 10-02]: Signal handler pattern: server in goroutine, main selects on quit+serverErrCh channels
 - [Phase 10-02]: .gitignore bare 'rtx' fixed to '/rtx' to prevent ignoring cmd/rtx/ source directory
+- [Phase 11-react-frontend]: [11-01]: snake_case TypeScript types match Go JSON serialization -- no camelCase mapping layer; APIEnvelope unwrapped at client.ts layer; web/dist excluded from git
 
 ### Pending Todos
 
@@ -132,7 +134,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-06T09:52:13.484Z
-Stopped at: Completed 10-02-PLAN.md (StopAll + signal handling, graceful shutdown in rtx serve)
+Last session: 2026-03-06T14:05:14.912Z
+Stopped at: Completed 11-01-PLAN.md (React scaffold, API client, ProcessList, ProcessForm, LogViewer)
 Resume file: None
 Next: Plan and Execute Phase 9 — REST API

@@ -140,7 +140,7 @@ Plans:
   4. User can open a log viewer for any process and see recent output that refreshes every 2 seconds while the process is running
   5. User can edit a stopped process's definition and delete a stopped process from the UI
   6. `./bin/rtx serve` (without Vite running) serves both the React app and the API at the same origin
-**Plans:** 2/2 plans complete
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 11-01-PLAN.md — React scaffolding and core Dashboard UI
 - [ ] 11-02-PLAN.md — Log Viewer and process lifecycle controls
@@ -159,4 +159,4 @@ Plans:
 | 8. Restart Policies | 2/2 | Complete   | 2026-03-06 | - |
 | 9. REST API | 1/2 | In Progress|  | - |
 | 10. CLI serve and Graceful Shutdown | 2/2 | Complete   | 2026-03-06 | - |
-| 11. React Frontend | v1.1 | 2/2 | Not started | - |
+| 11. React Frontend | 1/2 | In Progress|  | - |
