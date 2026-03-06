@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.1
+milestone_name: Full-Stack Process Manager
+status: planning
+stopped_at: Completed 08-01-PLAN.md (StateRestarting FSM, RestartPolicy backoff fields, restartCancelCh — all 37 tests pass with -race)
+last_updated: "2026-03-06T08:58:53.278Z"
+last_activity: 2026-03-05 — Phase 8 planning complete (08-01, 08-02 plans created).
+progress:
+  total_phases: 8
+  completed_phases: 4
+  total_plans: 15
+  completed_plans: 8
+  percent: 53
+---
+
 # Project State
 
 ## Project Reference
@@ -9,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 ## Current Position
 
-Phase: 7 of 11 (Dependency Ordering)
-Plan: 2 of 2 complete (Phase 7 COMPLETE)
-Status: Phase 7 complete — ErrDependencyNotReady, checkDepsRunning(), Start() dependency check, 7 integration tests with real sleep processes (chain, diamond, independent), all 37 tests pass with -race
-Last activity: 2026-03-02 — Phase 7 plan 02 executed (ErrDependencyNotReady, checkDepsRunning, Start() dependency guard, 7 new integration tests)
+Phase: 8 of 11 (Restart Policies)
+Plan: 2 of 2 complete (Phase 8 PLANNING COMPLETE)
+Status: Phase 8 planning complete — awaiting execution. Next up: Phase 9 planning.
+Last activity: 2026-03-05 — Phase 8 planning complete (08-01, 08-02 plans created).
 
-Progress: [█████░░░░░] 36% (v1.1) — v1.0 complete, Phase 4 done, Phase 5 done (all 3 plans), Phase 6 done (all 2 plans), Phase 7 done (all 2 plans)
+Progress: [█████░░░░░] 53%
 
 ## Performance Metrics
 
@@ -37,6 +53,7 @@ Progress: [█████░░░░░] 36% (v1.1) — v1.0 complete, Phase 4
 | Phase 06-scheduler-start-stop-and-lifecycle P02 | 2 | 2 tasks | 2 files |
 | Phase 07-dependency-ordering P01 | 2 | 2 tasks | 4 files |
 | Phase 07-dependency-ordering P02 | 3 | 2 tasks | 3 files |
+| Phase 08-restart-policies P01 | 8 | 4 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -79,6 +96,9 @@ Phase 6 plan 01 decisions:
 - [Phase 07-01]: [07-01 impl]: StartAll() snapshots s.processes under RLock before releasing for Start() calls — prevents lock inversion
 - [Phase 07-02]: [07-02 impl]: checkDepsRunning() called inside Start() write lock before StateStarting transition — prevents TOCTOU and no additional locking needed
 - [Phase 07-02]: [07-02 impl]: Reuse existing killProcess/getState test helpers from lifecycle_test.go — same-package tests share helpers, no redeclaration
+- [Phase 08-restart-policies]: [08-01 arch]: StateRestarting placed after StateFailed in iota — existing numeric values unchanged
+- [Phase 08-restart-policies]: [08-01 arch]: BackoffFactor zero-value defaults to 2.0 at runtime in restart loop (08-02), not at struct level — keeps zero-value RestartPolicy meaningful
+- [Phase 08-restart-policies]: [08-01 arch]: restartCancelCh added to ManagedProcess — closed by Stop() to interrupt backoff sleep, same close-to-cancel pattern as doneCh
 
 ### Pending Todos
 
@@ -94,7 +114,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed 07-02-PLAN.md (ErrDependencyNotReady, checkDepsRunning, Start() dependency check — 7 integration tests with real processes, all 37 tests pass with -race)
+Last session: 2026-03-06T08:58:53.276Z
+Stopped at: Completed 08-01-PLAN.md (StateRestarting FSM, RestartPolicy backoff fields, restartCancelCh — all 37 tests pass with -race)
 Resume file: None
 Next: Execute Phase 8 — Restart Policy

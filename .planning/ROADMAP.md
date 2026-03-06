@@ -97,7 +97,10 @@ Plans:
   3. Restart delays grow exponentially (e.g., 1s, 2s, 4s, 8s) and are capped at the configured max delay
   4. After reaching max retries the process status becomes failed and no further restart is attempted
   5. Calling stop on a process that is waiting in a backoff delay cancels the pending restart immediately
-**Plans**: TBD
+**Plans:** 1/2 plans executed
+Plans:
+- [ ] 08-01-PLAN.md — Types and FSM updates (SCH-04, RST-02, RST-04)
+- [ ] 08-02-PLAN.md — Restart logic and integration (RST-01, RST-02, RST-03, RST-04)
 
 ### Phase 9: REST API
 **Goal**: All process management operations are reachable over HTTP — the scheduler is fully accessible to external clients including the React frontend, with correct HTTP semantics and CORS support
@@ -121,7 +124,10 @@ Plans:
   2. `rtx run <command>` still works as the v1.0 single-process runner (backwards compatible)
   3. Pressing Ctrl+C causes the server to stop all managed processes and exit within 10 seconds
   4. After Ctrl+C, `ps aux` shows no orphaned child processes that were managed by rtx
-**Plans**: TBD
+**Plans:** 2/2 plans complete
+Plans:
+- [ ] 10-01-PLAN.md — Refactor main.go for subcommands and implement rtx serve
+- [ ] 10-02-PLAN.md — Implement StopAll() and graceful shutdown orchestration
 
 ### Phase 11: React Frontend
 **Goal**: Users can manage all their processes entirely from a browser — create, start, stop, monitor status, view logs, edit definitions, and delete processes without touching the CLI
@@ -134,7 +140,10 @@ Plans:
   4. User can open a log viewer for any process and see recent output that refreshes every 2 seconds while the process is running
   5. User can edit a stopped process's definition and delete a stopped process from the UI
   6. `./bin/rtx serve` (without Vite running) serves both the React app and the API at the same origin
-**Plans**: TBD
+**Plans:** 2/2 plans complete
+Plans:
+- [ ] 11-01-PLAN.md — React scaffolding and core Dashboard UI
+- [ ] 11-02-PLAN.md — Log Viewer and process lifecycle controls
 
 ## Progress
 
@@ -147,7 +156,7 @@ Plans:
 | 5. Scheduler Data Structures and Log Buffer | 2/2 | Complete    | 2026-03-01 | - |
 | 6. Scheduler Start, Stop, and Lifecycle | 2/2 | Complete   | 2026-03-02 | - |
 | 7. Dependency Ordering | 2/2 | Complete   | 2026-03-02 | - |
-| 8. Restart Policies | v1.1 | 0/TBD | Not started | - |
+| 8. Restart Policies | 1/2 | In Progress|  | - |
 | 9. REST API | v1.1 | 0/TBD | Not started | - |
-| 10. CLI serve and Graceful Shutdown | v1.1 | 0/TBD | Not started | - |
-| 11. React Frontend | v1.1 | 0/TBD | Not started | - |
+| 10. CLI serve and Graceful Shutdown | v1.1 | 2/2 | Not started | - |
+| 11. React Frontend | v1.1 | 2/2 | Not started | - |
