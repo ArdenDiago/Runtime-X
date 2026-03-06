@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
 status: completed
-stopped_at: Completed 11-01-PLAN.md (React scaffold, API client, ProcessList, ProcessForm, LogViewer)
-last_updated: "2026-03-06T14:05:14.914Z"
-last_activity: 2026-03-06 — Phase 11-01 execution complete (React scaffold, API client, ProcessList/Form/LogViewer, npm run build succeeds).
+stopped_at: Completed 11-02-PLAN.md (Log Viewer, Start/Stop/Edit/Delete controls, production build verified)
+last_updated: "2026-03-06T14:06:47.081Z"
+last_activity: 2026-03-06 — Phase 11-01 execution complete (React scaffold, API client, ProcessList, ProcessForm, LogViewer).
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 15
-  completed_plans: 14
-  percent: 93
+  completed_plans: 15
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 11: React Frontend
+**Current focus:** v1.1 COMPLETE — Phase 11: React Frontend done.
 
 ## Current Position
 
-Phase: 11 of 11 (React Frontend) — IN PROGRESS
-Plan: 1 of 2 complete
-Status: Phase 11-01 complete — React 19 + Vite 7 dashboard with ProcessList (2s polling), ProcessForm, LogViewer. npm run build succeeds.
-Last activity: 2026-03-06 — Phase 11-01 execution complete (React scaffold, API client, ProcessList, ProcessForm, LogViewer).
+Phase: 11 of 11 (React Frontend) — COMPLETE
+Plan: 2 of 2 complete (Phase 11 EXECUTION COMPLETE)
+Status: Phase 11-02 complete — Start/Stop/Edit/Delete controls, LogViewer with 2s polling, production build verified. v1.1 milestone COMPLETE.
+Last activity: 2026-03-06 — Phase 11-02 execution complete (Log Viewer, Start/Stop/Edit/Delete controls, production build verified).
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [█████████░] 93%
 | Phase 10-cli-serve-and-graceful-shutdown P01 | 4 | 2 tasks | 3 files |
 | Phase 10-cli-serve-and-graceful-shutdown P02 | 9 | 2 tasks | 4 files |
 | Phase 11-react-frontend P01 | 11 | 4 tasks | 13 files |
+| Phase 11-react-frontend P02 | 14 | 4 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,7 @@ Phase 6 plan 01 decisions:
 - [Phase 10-02]: Signal handler pattern: server in goroutine, main selects on quit+serverErrCh channels
 - [Phase 10-02]: .gitignore bare 'rtx' fixed to '/rtx' to prevent ignoring cmd/rtx/ source directory
 - [Phase 11-react-frontend]: [11-01]: snake_case TypeScript types match Go JSON serialization -- no camelCase mapping layer; APIEnvelope unwrapped at client.ts layer; web/dist excluded from git
+- [Phase 11-react-frontend]: All Phase 11-02 features (Start/Stop/Edit/Delete/LogViewer) delivered in Phase 11-01 execution — editTarget state swap for edit mode, window.confirm for delete, terminal-styled LogViewer with stderr color coding
 
 ### Pending Todos
 
@@ -134,7 +136,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-06T14:05:14.912Z
-Stopped at: Completed 11-01-PLAN.md (React scaffold, API client, ProcessList, ProcessForm, LogViewer)
+Last session: 2026-03-06T14:06:47.078Z
+Stopped at: Completed 11-02-PLAN.md (Log Viewer, Start/Stop/Edit/Delete controls, production build verified)
 Resume file: None
 Next: Plan and Execute Phase 9 — REST API

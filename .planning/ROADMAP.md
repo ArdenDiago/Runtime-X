@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-3 (shipped 2026-02-28)
-- 🚧 **v1.1 Full-Stack Process Manager** — Phases 4-11 (in progress)
+- ✅ **v1.1 Full-Stack Process Manager** — Phases 4-11 (shipped 2026-03-06)
 
 ## Phases
 
@@ -16,7 +16,7 @@
 
 </details>
 
-### 🚧 v1.1 Full-Stack Process Manager (In Progress)
+### ✅ v1.1 Full-Stack Process Manager (SHIPPED 2026-03-06)
 
 **Milestone Goal:** Transform rtx from a single-process CLI runner into a multi-process manager with a web UI for full browser-based process management.
 
@@ -25,9 +25,9 @@
 - [x] **Phase 6: Scheduler Start, Stop, and Lifecycle** — Implement the core process lifecycle methods on a race-free foundation (completed 2026-03-02)
 - [x] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator (completed 2026-03-02)
 - [x] **Phase 8: Restart Policies** — Add exponential backoff restart with cancellable goroutines as the second v1.1 differentiator (completed 2026-03-06)
-- [ ] **Phase 9: REST API** — Expose the full scheduler as a thin HTTP adapter with CORS support
+- [x] **Phase 9: REST API** — Expose the full scheduler as a thin HTTP adapter with CORS support (completed 2026-03-06)
 - [x] **Phase 10: CLI serve and Graceful Shutdown** — Wire everything into `rtx serve` with clean signal handling (completed 2026-03-06)
-- [ ] **Phase 11: React Frontend** — Deliver the browser-based process management UI
+- [x] **Phase 11: React Frontend** — Deliver the browser-based process management UI (completed 2026-03-06)
 
 ## Phase Details
 
@@ -140,10 +140,10 @@ Plans:
   4. User can open a log viewer for any process and see recent output that refreshes every 2 seconds while the process is running
   5. User can edit a stopped process's definition and delete a stopped process from the UI
   6. `./bin/rtx serve` (without Vite running) serves both the React app and the API at the same origin
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 11-01-PLAN.md — React scaffolding and core Dashboard UI
-- [ ] 11-02-PLAN.md — Log Viewer and process lifecycle controls
+- [x] 11-01-PLAN.md — React scaffolding and core Dashboard UI
+- [x] 11-02-PLAN.md — Log Viewer and process lifecycle controls
 
 ## Progress
 
@@ -159,4 +159,4 @@ Plans:
 | 8. Restart Policies | 2/2 | Complete   | 2026-03-06 | - |
 | 9. REST API | 1/2 | In Progress|  | - |
 | 10. CLI serve and Graceful Shutdown | 2/2 | Complete   | 2026-03-06 | - |
-| 11. React Frontend | 1/2 | In Progress|  | - |
+| 11. React Frontend | 2/2 | Complete   | 2026-03-06 | - |
