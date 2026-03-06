@@ -23,5 +23,6 @@ tmp/
 Thumbs.db
 
 # Compiled binaries
-rtx
+# Match the root-level rtx binary but not the cmd/rtx/ source directory.
+/rtx
 bin/
