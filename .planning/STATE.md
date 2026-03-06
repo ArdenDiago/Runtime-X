@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
-status: planning
+status: completed
 stopped_at: Completed 08-02-PLAN.md (waitAndRestart exponential backoff, monitorProcess restart policy, Stop() cancellation — all 41 tests pass with -race)
-last_updated: "2026-03-06T09:03:12.907Z"
-last_activity: 2026-03-05 — Phase 8 planning complete (08-01, 08-02 plans created).
+last_updated: "2026-03-06T09:08:28.037Z"
+last_activity: 2026-03-06 — Phase 8 execution complete (08-01 types/FSM, 08-02 restart logic — 41 tests pass with -race).
 progress:
-  total_phases: 11
+  total_phases: 8
   completed_phases: 5
   total_plans: 15
   completed_plans: 9

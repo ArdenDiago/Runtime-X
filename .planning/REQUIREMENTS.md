@@ -30,10 +30,10 @@ Requirements for v1.1 Full-Stack Process Manager. Each maps to roadmap phases.
 
 ### Restart Policies
 
-- [ ] **RST-01**: User can configure a process with restart-on-failure policy (restart when exit code != 0)
-- [ ] **RST-02**: Restart uses exponential backoff (initial delay, max delay, max retries configurable per process)
-- [ ] **RST-03**: Restart attempts stop after reaching max retries — process status becomes "failed"
-- [ ] **RST-04**: User can stop a process during a backoff wait period (cancels pending restart)
+- [x] **RST-01**: User can configure a process with restart-on-failure policy (restart when exit code != 0)
+- [x] **RST-02**: Restart uses exponential backoff (initial delay, max delay, max retries configurable per process)
+- [x] **RST-03**: Restart attempts stop after reaching max retries — process status becomes "failed"
+- [x] **RST-04**: User can stop a process during a backoff wait period (cancels pending restart)
 
 ### REST API
 
@@ -121,10 +121,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEP-01 | Phase 7 | Complete |
 | DEP-02 | Phase 7 | Complete |
 | DEP-03 | Phase 7 | Complete |
-| RST-01 | Phase 8 | Pending |
-| RST-02 | Phase 8 | Pending |
-| RST-03 | Phase 8 | Pending |
-| RST-04 | Phase 8 | Pending |
+| RST-01 | Phase 8 | Complete |
+| RST-02 | Phase 8 | Complete |
+| RST-03 | Phase 8 | Complete |
+| RST-04 | Phase 8 | Complete |
 | API-01 | Phase 9 | Pending |
 | API-02 | Phase 9 | Pending |
 | API-03 | Phase 9 | Pending |
