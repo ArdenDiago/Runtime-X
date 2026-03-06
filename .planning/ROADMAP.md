@@ -26,7 +26,7 @@
 - [x] **Phase 7: Dependency Ordering** — Add topological start ordering with cycle detection as the primary v1.1 differentiator (completed 2026-03-02)
 - [x] **Phase 8: Restart Policies** — Add exponential backoff restart with cancellable goroutines as the second v1.1 differentiator (completed 2026-03-06)
 - [ ] **Phase 9: REST API** — Expose the full scheduler as a thin HTTP adapter with CORS support
-- [ ] **Phase 10: CLI serve and Graceful Shutdown** — Wire everything into `rtx serve` with clean signal handling
+- [x] **Phase 10: CLI serve and Graceful Shutdown** — Wire everything into `rtx serve` with clean signal handling (completed 2026-03-06)
 - [ ] **Phase 11: React Frontend** — Deliver the browser-based process management UI
 
 ## Phase Details
@@ -124,7 +124,7 @@ Plans:
   2. `rtx run <command>` still works as the v1.0 single-process runner (backwards compatible)
   3. Pressing Ctrl+C causes the server to stop all managed processes and exit within 10 seconds
   4. After Ctrl+C, `ps aux` shows no orphaned child processes that were managed by rtx
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 10-01-PLAN.md — Refactor main.go for subcommands and implement rtx serve
 - [ ] 10-02-PLAN.md — Implement StopAll() and graceful shutdown orchestration
@@ -158,5 +158,5 @@ Plans:
 | 7. Dependency Ordering | 2/2 | Complete   | 2026-03-02 | - |
 | 8. Restart Policies | 2/2 | Complete   | 2026-03-06 | - |
 | 9. REST API | 1/2 | In Progress|  | - |
-| 10. CLI serve and Graceful Shutdown | 1/2 | In Progress|  | - |
+| 10. CLI serve and Graceful Shutdown | 2/2 | Complete   | 2026-03-06 | - |
 | 11. React Frontend | v1.1 | 2/2 | Not started | - |

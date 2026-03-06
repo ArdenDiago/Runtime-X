@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
 status: completed
-stopped_at: Completed 10-01-PLAN.md (rtx serve with static file serving, cmdRun isolation, 2 tasks complete)
-last_updated: "2026-03-06T09:44:12.309Z"
+stopped_at: Completed 10-02-PLAN.md (StopAll + signal handling, graceful shutdown in rtx serve)
+last_updated: "2026-03-06T09:52:13.487Z"
 last_activity: 2026-03-06 — Phase 9-02 execution complete (resource/lifecycle/log handlers, ProcessSnapshot race fix, 21 tests pass with -race).
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 67
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 10: CLI Serve & Graceful Shutdown
+**Current focus:** v1.1 — Phase 11: React Frontend
 
 ## Current Position
 
-Phase: 9 of 11 (REST API) — COMPLETE
-Plan: 2 of 2 complete (Phase 9 EXECUTION COMPLETE)
-Status: Phase 9 complete — all 8 REST API endpoints, CORS, 21 handler tests pass with -race, ProcessSnapshot race fix. Next: Phase 10 (CLI serve + graceful shutdown).
-Last activity: 2026-03-06 — Phase 9-02 execution complete (resource/lifecycle/log handlers, ProcessSnapshot race fix, 21 tests pass with -race).
+Phase: 10 of 11 (CLI Serve & Graceful Shutdown) — COMPLETE
+Plan: 2 of 2 complete (Phase 10 EXECUTION COMPLETE)
+Status: Phase 10 complete — rtx serve with SIGINT/SIGTERM handling, http.Server.Shutdown drain, scheduler.StopAll() parallel shutdown. Next: Phase 11 (React frontend).
+Last activity: 2026-03-06 — Phase 10-02 execution complete (StopAll + signal handling, graceful shutdown in rtx serve, .gitignore fix).
 
-Progress: [███████░░░] 67%
+Progress: [█████████░] 87%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [███████░░░] 67%
 | Phase 09-REST-API P01 | 3 | 3 tasks | 4 files |
 | Phase 09-REST-API P02 | 10 | 3 tasks | 3 files |
 | Phase 10-cli-serve-and-graceful-shutdown P01 | 4 | 2 tasks | 3 files |
+| Phase 10-cli-serve-and-graceful-shutdown P02 | 9 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,10 @@ Phase 6 plan 01 decisions:
 - [Phase 10-01]: http.FileServer(http.Dir('web/dist')) for static serving — relative to process working directory; sufficient for v1.1 development workflow
 - [Phase 10-01]: Top-level mux: /api/ routes to srv.Routes() (CORS-wrapped), / to FileServer — single mux, no prefix stripping
 - [Phase 10-01]: flag.NewFlagSet per subcommand for clean flag isolation and per-subcommand usage output
+- [Phase 10-02]: StopAll snapshots names under RLock before goroutines to prevent lock inversion with Stop() write lock
+- [Phase 10-02]: StopAll silently ignores ErrNotRunning races from snapshot-to-stop window
+- [Phase 10-02]: Signal handler pattern: server in goroutine, main selects on quit+serverErrCh channels
+- [Phase 10-02]: .gitignore bare 'rtx' fixed to '/rtx' to prevent ignoring cmd/rtx/ source directory
 
 ### Pending Todos
 
@@ -127,7 +132,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-06T09:44:12.307Z
-Stopped at: Completed 10-01-PLAN.md (rtx serve with static file serving, cmdRun isolation, 2 tasks complete)
+Last session: 2026-03-06T09:52:13.484Z
+Stopped at: Completed 10-02-PLAN.md (StopAll + signal handling, graceful shutdown in rtx serve)
 Resume file: None
 Next: Plan and Execute Phase 9 — REST API
