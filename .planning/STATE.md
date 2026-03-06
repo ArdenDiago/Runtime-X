@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Full-Stack Process Manager
-status: completed
-stopped_at: "Completed 09-01-PLAN.md (API foundation: internal/api package with 8 REST endpoints, CORS middleware, JSON envelope, 7 tests pass with -race)"
-last_updated: "2026-03-06T09:26:58.245Z"
-last_activity: 2026-03-06 — Phase 9-01 execution complete (internal/api package: 8 REST endpoints, CORS, JSON envelope, 48 tests pass with -race).
+status: executing
+stopped_at: Completed 09-02-PLAN.md (all 8 REST API handlers + CORS, 21 handler tests pass with -race, ProcessSnapshot race fix)
+last_updated: "2026-03-06T09:36:00.104Z"
+last_activity: 2026-03-06 — Phase 9-01 execution complete (internal/api package with 8 REST endpoints, CORS, JSON envelope, 7 tests pass with -race).
 progress:
   total_phases: 8
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
   percent: 67
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Correct, deterministic process lifecycle management — no zombies, no orphans, exact exit codes, clean signal forwarding.
-**Current focus:** v1.1 — Phase 9: REST API (In Progress)
+**Current focus:** v1.1 — Phase 10: CLI Serve & Graceful Shutdown
 
 ## Current Position
 
-Phase: 9 of 11 (REST API) — IN PROGRESS
-Plan: 1 of 2 complete (09-01 API Foundation done — 8 endpoints, CORS, JSON envelope, 48 tests pass with -race)
-Status: Phase 9 in progress — API foundation complete. Next: Phase 09-02 (additional handler tests).
-Last activity: 2026-03-06 — Phase 9-01 execution complete (internal/api package with 8 REST endpoints, CORS, JSON envelope, 7 tests pass with -race).
+Phase: 9 of 11 (REST API) — COMPLETE
+Plan: 2 of 2 complete (Phase 9 EXECUTION COMPLETE)
+Status: Phase 9 complete — all 8 REST API endpoints, CORS, 21 handler tests pass with -race, ProcessSnapshot race fix. Next: Phase 10 (CLI serve + graceful shutdown).
+Last activity: 2026-03-06 — Phase 9-02 execution complete (resource/lifecycle/log handlers, ProcessSnapshot race fix, 21 tests pass with -race).
 
 Progress: [███████░░░] 67%
 
@@ -56,6 +56,7 @@ Progress: [███████░░░] 67%
 | Phase 08-restart-policies P01 | 8 | 4 tasks | 2 files |
 | Phase 08-restart-policies P02 | 18 | 4 tasks | 3 files |
 | Phase 09-REST-API P01 | 3 | 3 tasks | 4 files |
+| Phase 09-REST-API P02 | 10 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,8 @@ Phase 6 plan 01 decisions:
 - [Phase 08-restart-policies]: [08-02 impl]: calcDelay uses exponent = RestartCount-1 so first delay = Delay * factor^0 = Delay (no inflation on first retry)
 - [Phase 08-restart-policies]: [08-02 arch]: Stop() in StateRestarting closes restartCancelCh and returns immediately — process is already dead, no SIGTERM needed
 - [Phase 09-REST-API]: [09-01 arch]: send() writes Content-Type then WriteHeader then encodes; CORS middleware wraps entire mux at Routes() level; UpdateProcess uses Remove+Register cycle; fromProcessJSON ignores body.Name for PUT
+- [Phase 09-REST-API]: ProcessSnapshot value type: handlers use Snapshot()/SnapshotAll() instead of Get()/List() to prevent DATA RACE with monitorProcess goroutine
+- [Phase 09-REST-API]: 202 Accepted for StartProcess (async) — UpdateProcess uses Remove+Register pattern — logsEnvelope includes process name field
 
 ### Pending Todos
 
@@ -120,7 +123,7 @@ Resolved:
 
 ## Session Continuity
 
-Last session: 2026-03-06T09:26:58.243Z
-Stopped at: Completed 09-01-PLAN.md (API foundation: internal/api package with 8 REST endpoints, CORS middleware, JSON envelope, 7 tests pass with -race)
+Last session: 2026-03-06T09:36:00.102Z
+Stopped at: Completed 09-02-PLAN.md (all 8 REST API handlers + CORS, 21 handler tests pass with -race, ProcessSnapshot race fix)
 Resume file: None
 Next: Plan and Execute Phase 9 — REST API
