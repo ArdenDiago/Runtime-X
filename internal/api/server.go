@@ -48,6 +48,24 @@ type envelope struct {
 	Error string `json:"error,omitempty"`
 }
 
+// corsMiddleware adds CORS headers to every response and handles preflight OPTIONS
+// requests. For v1.1 simplicity it allows all origins, methods, and headers.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		// Handle preflight OPTIONS request immediately — no further processing needed.
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // send writes a JSON response with the given status code.
 // If err is non-nil the Error field is populated; otherwise Data is used.
 func send(w http.ResponseWriter, status int, data any, err error) {
