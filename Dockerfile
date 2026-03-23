@@ -1,13 +1,37 @@
-FROM golang:tip-trixie
+# Stage 1: Build the React frontend
+FROM node:22-slim AS frontend
+WORKDIR /web
+COPY web/package.json web/package-lock.json* ./
+RUN npm install
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build the Go binary
+FROM golang:tip-trixie AS backend
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -o rtx ./cmd/rtx
+
+# Stage 3: Runtime image
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    procps \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+# Copy the compiled binary
+COPY --from=backend /app/rtx ./rtx
 
-RUN go mod download
+# Copy the built frontend assets
+COPY --from=frontend /web/dist ./web/dist
 
-COPY . .
+EXPOSE 8080
 
-# RUN go build -v -o /usr/local/bin/app ./...
-
-# CMD ["app"]
+# Default to serve mode — override with: docker run rtx run <command>
+ENTRYPOINT ["./rtx"]
+CMD ["serve"]
