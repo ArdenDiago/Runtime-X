@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -201,6 +202,41 @@ func TestCreateProcess_InvalidName(t *testing.T) {
 		if rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("name %q: expected 422, got %d", name, rec.Code)
 		}
+	}
+}
+
+// TestCreateProcess_DryRun verifies that POST /api/processes with dry_run=true
+// validates and returns success, but does not keep the process registered.
+func TestCreateProcess_DryRun(t *testing.T) {
+	srv := newTestServer()
+	body := processJSON{
+		Name:    "preview-worker",
+		Command: "/usr/bin/sleep",
+		Args:    []string{"1"},
+		DryRun:  true,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/processes", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	srv.CreateProcess(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var proc processJSON
+	decodeResponse(t, rec, &proc)
+	if proc.Name != "preview-worker" {
+		t.Errorf("expected name 'preview-worker', got %q", proc.Name)
+	}
+	if proc.State != "idle" {
+		t.Errorf("expected state 'idle', got %q", proc.State)
+	}
+
+	if _, err := srv.Scheduler.Snapshot("preview-worker"); !errors.Is(err, scheduler.ErrNotFound) {
+		t.Fatalf("expected process to be removed after dry-run, got err=%v", err)
 	}
 }
 

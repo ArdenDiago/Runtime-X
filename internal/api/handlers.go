@@ -27,6 +27,7 @@ type processJSON struct {
 	Args            []string          `json:"args,omitempty"`
 	Env             []string          `json:"env,omitempty"`
 	WorkDir         string            `json:"work_dir,omitempty"`
+	DryRun          bool              `json:"dry_run,omitempty"`
 	RestartPolicy   restartPolicyJSON `json:"restart_policy"`
 	DependsOn       []string          `json:"depends_on,omitempty"`
 	LogBufferSize   int               `json:"log_buffer_size,omitempty"`
@@ -118,6 +119,12 @@ func (s *Server) CreateProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	snap, _ := s.Scheduler.Snapshot(def.Name)
+	if body.DryRun {
+		if err := s.Scheduler.Remove(def.Name); err != nil {
+			send(w, http.StatusInternalServerError, nil, err)
+			return
+		}
+	}
 	send(w, http.StatusCreated, snapshotToJSON(snap), nil)
 }
 
