@@ -9,6 +9,7 @@ const BASE = '/api'
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...options,
   })
 
@@ -65,4 +66,22 @@ export function stopProcess(name: string): Promise<ProcessJSON> {
 // GET /api/processes/{name}/logs -- get buffered log entries
 export function getLogs(name: string): Promise<LogsEnvelope> {
   return request<LogsEnvelope>(`/processes/${encodeURIComponent(name)}/logs`)
+}
+
+// POST /api/login -- authenticate user
+export function login(credentials: Record<string, string>): Promise<{message: string}> {
+  return request<{message: string}>('/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials)
+  })
+}
+
+// POST /api/logout -- end session
+export function logout(): Promise<{message: string}> {
+  return request<{message: string}>('/logout', { method: 'POST' })
+}
+
+// GET /api/auth/check -- verify active session
+export function checkAuth(): Promise<{authenticated: boolean}> {
+  return request<{authenticated: boolean}>('/auth/check')
 }
