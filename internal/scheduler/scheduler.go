@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -52,6 +53,9 @@ func New() *Scheduler {
 // Returns fmt.Errorf("%w: %s", ErrAlreadyExists, name) if the name is already registered.
 func (s *Scheduler) Register(def ProcessDef) error {
 	if err := validateName(def.Name); err != nil {
+		return err
+	}
+	if err := validateEnv(def.Env); err != nil {
 		return err
 	}
 	if def.LogBufferSize <= 0 {
@@ -222,6 +226,17 @@ func (s *Scheduler) SnapshotAll() []ProcessSnapshot {
 func validateName(name string) error {
 	if !validName.MatchString(name) {
 		return fmt.Errorf("invalid process name %q: must match ^[a-z0-9][a-z0-9-]*$", name)
+	}
+	return nil
+}
+
+// validateEnv returns an error when any env entry does not follow KEY=VALUE.
+func validateEnv(env []string) error {
+	for _, e := range env {
+		parts := strings.Split(e, "=")
+		if len(parts) < 2 || parts[0] == "" {
+			return fmt.Errorf("invalid env format %q: must be KEY=VALUE", e)
+		}
 	}
 	return nil
 }

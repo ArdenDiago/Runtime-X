@@ -102,6 +102,50 @@ func TestSchedulerRegisterDuplicate(t *testing.T) {
 	}
 }
 
+// TestSchedulerRegisterEnvValidation verifies KEY=VALUE validation for Env entries.
+func TestSchedulerRegisterEnvValidation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid env entries are accepted", func(t *testing.T) {
+		t.Parallel()
+		s := New()
+		err := s.Register(ProcessDef{
+			Name:    "env-ok",
+			Command: "/bin/sh",
+			Env:     []string{"A=1", "B=two=parts", "EMPTY="},
+		})
+		if err != nil {
+			t.Fatalf("Register valid env: unexpected error: %v", err)
+		}
+	})
+
+	t.Run("missing equals is rejected", func(t *testing.T) {
+		t.Parallel()
+		s := New()
+		err := s.Register(ProcessDef{
+			Name:    "env-no-equals",
+			Command: "/bin/sh",
+			Env:     []string{"NOVALUE"},
+		})
+		if err == nil {
+			t.Fatal("Register missing equals: expected error, got nil")
+		}
+	})
+
+	t.Run("empty key is rejected", func(t *testing.T) {
+		t.Parallel()
+		s := New()
+		err := s.Register(ProcessDef{
+			Name:    "env-empty-key",
+			Command: "/bin/sh",
+			Env:     []string{"=value"},
+		})
+		if err == nil {
+			t.Fatal("Register empty key: expected error, got nil")
+		}
+	})
+}
+
 // TestSchedulerRegisterDefaultLogBufferSize verifies that LogBufferSize <= 0
 // is defaulted to 1000 and the process is registered successfully.
 func TestSchedulerRegisterDefaultLogBufferSize(t *testing.T) {
@@ -281,12 +325,12 @@ func TestStateTransitions(t *testing.T) {
 		{StateStarting, StateRunning},
 		{StateStarting, StateFailed},
 		{StateRunning, StateStopping},
-		{StateRunning, StateStopped},    // natural clean exit (exit code 0)
-		{StateRunning, StateFailed},     // crash
-		{StateRunning, StateRestarting}, // restart policy triggers backoff
-		{StateRestarting, StateStarting},  // backoff elapsed — spawn next attempt
-		{StateRestarting, StateStopping},  // Stop() interrupts pending restart
-		{StateRestarting, StateFailed},    // MaxRetries exhausted
+		{StateRunning, StateStopped},     // natural clean exit (exit code 0)
+		{StateRunning, StateFailed},      // crash
+		{StateRunning, StateRestarting},  // restart policy triggers backoff
+		{StateRestarting, StateStarting}, // backoff elapsed — spawn next attempt
+		{StateRestarting, StateStopping}, // Stop() interrupts pending restart
+		{StateRestarting, StateFailed},   // MaxRetries exhausted
 		{StateStopping, StateStopped},
 		{StateStopping, StateFailed},
 		{StateStopped, StateStarting},
