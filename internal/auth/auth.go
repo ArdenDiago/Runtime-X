@@ -21,7 +21,7 @@ var (
 	// Pre-computed hash for password "Admin@1234"
 	// Cost is bcrypt.DefaultCost
 	// Generated using bcrypt.GenerateFromPassword([]byte("Admin@1234"), bcrypt.DefaultCost)
-	adminHash = []byte("$2a$10$U9Hk2YfRTYx9GItlT9oE/u3rR6H2M1vT7F4F/L5xXpB1jZ2OQyvKq")
+	adminHash = []byte("$2a$10$A2ISWIJ9oU1rkYNVfWRFtuGchsKiyIZUWcCYL8FDw9SG.YetCsjQC")
 	
 	// Single hardcoded user per assignment requirement
 	adminUsername = "admin"
