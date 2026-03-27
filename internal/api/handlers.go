@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"runtimex/internal/scheduler"
@@ -90,8 +91,12 @@ func fromProcessJSON(p processJSON) scheduler.ProcessDef {
 // Uses SnapshotAll() to ensure race-safe reads of live state fields.
 func (s *Server) ListProcesses(w http.ResponseWriter, r *http.Request) {
 	snaps := s.Scheduler.SnapshotAll()
+	query := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	out := make([]processJSON, 0, len(snaps))
 	for _, snap := range snaps {
+		if query != "" && !strings.Contains(strings.ToLower(snap.Def.Name), query) {
+			continue
+		}
 		out = append(out, snapshotToJSON(snap))
 	}
 	send(w, http.StatusOK, out, nil)
