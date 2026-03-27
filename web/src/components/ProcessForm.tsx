@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ProcessJSON } from '../api/types'
-import { createProcess, updateProcess } from '../api/client'
+import { createProcess, updateProcess, dryRunProcess } from '../api/client'
 
 interface ProcessFormProps {
   /** If provided, editing an existing process definition (PUT). Otherwise, creating (POST). */
@@ -13,6 +13,7 @@ interface FormState {
   name: string
   command: string
   args: string
+  env: string
   workDir: string
   dependsOn: string
   restartMode: string
@@ -25,6 +26,7 @@ function processToForm(proc: ProcessJSON): FormState {
     name: proc.name,
     command: proc.command,
     args: (proc.args ?? []).join(' '),
+    env: (proc.env ?? []).join('\n'),
     workDir: proc.work_dir ?? '',
     dependsOn: (proc.depends_on ?? []).join(', '),
     restartMode: proc.restart_policy?.mode ?? 'never',
@@ -37,6 +39,7 @@ const DEFAULT_FORM: FormState = {
   name: '',
   command: '',
   args: '',
+  env: '',
   workDir: '',
   dependsOn: '',
   restartMode: 'never',
@@ -57,41 +60,54 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
 }
 
+/** Build a Partial<ProcessJSON> from the current form state. */
+function buildDef(form: FormState): Partial<ProcessJSON> {
+  const envLines = form.env
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean)
+
+  return {
+    name: form.name.trim(),
+    command: form.command.trim(),
+    args: form.args.trim() ? form.args.trim().split(/\s+/) : [],
+    env: envLines.length > 0 ? envLines : undefined,
+    work_dir: form.workDir.trim() || undefined,
+    depends_on: form.dependsOn
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean),
+    restart_policy: {
+      mode: form.restartMode as 'never' | 'on-failure' | 'always',
+      max_retries: Number(form.maxRetries),
+      delay_secs: Number(form.delaySecs),
+      max_delay_secs: 60,
+      backoff_factor: 2,
+    },
+  }
+}
+
 export function ProcessForm({ existing, onSuccess, onCancel }: ProcessFormProps) {
   const [form, setForm] = useState<FormState>(
     existing ? processToForm(existing) : DEFAULT_FORM
   )
   const [error, setError] = useState<string | null>(null)
+  const [dryRunResult, setDryRunResult] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const isEdit = Boolean(existing)
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setDryRunResult(null)
     setSubmitting(true)
 
-    const def: Partial<ProcessJSON> = {
-      name: form.name.trim(),
-      command: form.command.trim(),
-      args: form.args.trim() ? form.args.trim().split(/\s+/) : [],
-      work_dir: form.workDir.trim() || undefined,
-      depends_on: form.dependsOn
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean),
-      restart_policy: {
-        mode: form.restartMode as 'never' | 'on-failure' | 'always',
-        max_retries: Number(form.maxRetries),
-        delay_secs: Number(form.delaySecs),
-        max_delay_secs: 60,
-        backoff_factor: 2,
-      },
-    }
+    const def = buildDef(form)
 
     try {
       if (isEdit && existing) {
@@ -107,6 +123,23 @@ export function ProcessForm({ existing, onSuccess, onCancel }: ProcessFormProps)
     }
   }
 
+  async function handleDryRun() {
+    setError(null)
+    setDryRunResult(null)
+    setSubmitting(true)
+
+    const def = buildDef(form)
+
+    try {
+      await dryRunProcess(def)
+      setDryRunResult('✅ Validation passed — definition is valid.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Validation failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -116,6 +149,9 @@ export function ProcessForm({ existing, onSuccess, onCancel }: ProcessFormProps)
 
       {error && (
         <p style={{ color: '#f44336', margin: 0, fontSize: '0.85em' }}>{error}</p>
+      )}
+      {dryRunResult && (
+        <p style={{ color: '#4caf50', margin: 0, fontSize: '0.85em' }}>{dryRunResult}</p>
       )}
 
       <label style={labelStyle}>
@@ -151,6 +187,21 @@ export function ProcessForm({ existing, onSuccess, onCancel }: ProcessFormProps)
           onChange={handleChange}
           placeholder="30"
           style={inputStyle}
+        />
+      </label>
+
+      <label style={labelStyle}>
+        Environment Variables
+        <span style={{ fontSize: '0.8em', color: '#888', fontWeight: 400 }}>
+          One KEY=VALUE per line
+        </span>
+        <textarea
+          name="env"
+          value={form.env}
+          onChange={handleChange}
+          placeholder={"PORT=9000\nNODE_ENV=production"}
+          rows={3}
+          style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '0.85em', resize: 'vertical' }}
         />
       </label>
 
@@ -221,6 +272,17 @@ export function ProcessForm({ existing, onSuccess, onCancel }: ProcessFormProps)
         >
           {submitting ? 'Saving...' : isEdit ? 'Update' : 'Create'}
         </button>
+        {!isEdit && (
+          <button
+            type="button"
+            onClick={handleDryRun}
+            disabled={submitting}
+            style={{ backgroundColor: '#ff9800', color: '#fff', border: 'none' }}
+            title="Validate the definition without saving it"
+          >
+            {submitting ? 'Validating...' : 'Validate (Dry Run)'}
+          </button>
+        )}
         <button type="button" onClick={onCancel} style={{ border: '1px solid #ccc' }}>
           Cancel
         </button>

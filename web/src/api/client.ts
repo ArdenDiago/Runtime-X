@@ -35,6 +35,14 @@ export function createProcess(def: Partial<ProcessJSON>): Promise<ProcessJSON> {
   })
 }
 
+// POST /api/processes with dry_run -- validate without persisting
+export function dryRunProcess(def: Partial<ProcessJSON>): Promise<ProcessJSON> {
+  return request<ProcessJSON>('/processes', {
+    method: 'POST',
+    body: JSON.stringify({ ...def, dry_run: true }),
+  })
+}
+
 // GET /api/processes/{name} -- get a single process
 export function getProcess(name: string): Promise<ProcessJSON> {
   return request<ProcessJSON>(`/processes/${encodeURIComponent(name)}`)

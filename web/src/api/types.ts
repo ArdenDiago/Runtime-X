@@ -31,6 +31,9 @@ export interface ProcessJSON {
   log_buffer_size?: number
   stop_timeout_secs?: number
 
+  // Dry-run flag -- when true, the backend validates but does not persist.
+  dry_run?: boolean
+
   // Runtime fields -- present in GET responses only.
   state?: ProcessState
   restart_count?: number
