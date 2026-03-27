@@ -1,0 +1,16 @@
+services:
+  api-service:
+    build:
+      context: .
+      dockerfile: api-service/Dockerfile
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "4000:3000"
+    depends_on:
+      - api-service

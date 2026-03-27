@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 
 	"runtimex/internal/scheduler"
 )
@@ -44,7 +46,7 @@ func (s *Server) Routes() http.Handler {
 	// Log route (API-08)
 	mux.HandleFunc("GET /api/processes/{name}/logs", requireAuth(s.GetLogs))
 
-	return corsMiddleware(mux)
+	return logMiddleware(corsMiddleware(mux))
 
 }
 
@@ -52,6 +54,15 @@ func (s *Server) Routes() http.Handler {
 type envelope struct {
 	Data  any    `json:"data,omitempty"`
 	Error string `json:"error,omitempty"`
+}
+
+// logMiddleware logs request method, path, and total handler duration.
+func logMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		log.Printf("[api] method=%s path=%s duration=%s", r.Method, r.URL.Path, time.Since(start))
+	})
 }
 
 // corsMiddleware adds CORS headers to every response and handles preflight OPTIONS

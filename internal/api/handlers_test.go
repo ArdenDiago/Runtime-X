@@ -113,6 +113,55 @@ func TestListProcesses_NonEmpty(t *testing.T) {
 	}
 }
 
+// TestListProcesses_FilterByQuery verifies ?q= filters process names case-insensitively.
+func TestListProcesses_FilterByQuery(t *testing.T) {
+	srv := newTestServer()
+	mustRegister(t, srv.Scheduler, "web")
+	mustRegister(t, srv.Scheduler, "worker")
+	mustRegister(t, srv.Scheduler, "api")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/processes?q=WEB", nil)
+	rec := httptest.NewRecorder()
+
+	srv.ListProcesses(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var procs []processJSON
+	decodeResponse(t, rec, &procs)
+
+	if len(procs) != 1 {
+		t.Fatalf("expected 1 process, got %d", len(procs))
+	}
+	if procs[0].Name != "web" {
+		t.Fatalf("expected process 'web', got %q", procs[0].Name)
+	}
+}
+
+// TestListProcesses_FilterNoMatches verifies ?q= returns empty result when no names match.
+func TestListProcesses_FilterNoMatches(t *testing.T) {
+	srv := newTestServer()
+	mustRegister(t, srv.Scheduler, "web")
+	mustRegister(t, srv.Scheduler, "worker")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/processes?q=does-not-exist", nil)
+	rec := httptest.NewRecorder()
+
+	srv.ListProcesses(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var procs []processJSON
+	decodeResponse(t, rec, &procs)
+	if len(procs) != 0 {
+		t.Fatalf("expected 0 processes, got %d", len(procs))
+	}
+}
+
 // ── CreateProcess ─────────────────────────────────────────────────────────────
 
 // TestCreateProcess_Valid verifies that POST /api/processes with a valid payload
