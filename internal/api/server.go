@@ -23,23 +23,29 @@ func NewServer(s *scheduler.Scheduler) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
+	// Auth routes
+	mux.HandleFunc("POST /api/login", s.HandleLogin)
+	mux.HandleFunc("POST /api/logout", s.HandleLogout)
+	mux.HandleFunc("GET /api/auth/check", requireAuth(s.HandleCheckAuth))
+
 	// Collection routes (API-01, API-02)
-	mux.HandleFunc("GET /api/processes", s.ListProcesses)
-	mux.HandleFunc("POST /api/processes", s.CreateProcess)
+	mux.HandleFunc("GET /api/processes", requireAuth(s.ListProcesses))
+	mux.HandleFunc("POST /api/processes", requireAuth(s.CreateProcess))
 
 	// Resource routes (API-03, API-04, API-05)
-	mux.HandleFunc("GET /api/processes/{name}", s.GetProcess)
-	mux.HandleFunc("PUT /api/processes/{name}", s.UpdateProcess)
-	mux.HandleFunc("DELETE /api/processes/{name}", s.DeleteProcess)
+	mux.HandleFunc("GET /api/processes/{name}", requireAuth(s.GetProcess))
+	mux.HandleFunc("PUT /api/processes/{name}", requireAuth(s.UpdateProcess))
+	mux.HandleFunc("DELETE /api/processes/{name}", requireAuth(s.DeleteProcess))
 
 	// Lifecycle routes (API-06, API-07)
-	mux.HandleFunc("POST /api/processes/{name}/start", s.StartProcess)
-	mux.HandleFunc("POST /api/processes/{name}/stop", s.StopProcess)
+	mux.HandleFunc("POST /api/processes/{name}/start", requireAuth(s.StartProcess))
+	mux.HandleFunc("POST /api/processes/{name}/stop", requireAuth(s.StopProcess))
 
 	// Log route (API-08)
-	mux.HandleFunc("GET /api/processes/{name}/logs", s.GetLogs)
+	mux.HandleFunc("GET /api/processes/{name}/logs", requireAuth(s.GetLogs))
 
 	return corsMiddleware(mux)
+
 }
 
 // envelope is the standard JSON response wrapper.
@@ -52,9 +58,16 @@ type envelope struct {
 // requests. For v1.1 simplicity it allows all origins, methods, and headers.
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		// Cannot use wildcard (*) when credentials are true; reflect origin or fallback to localhost
+		if origin == "" {
+			origin = "http://localhost:5173" // Vite default port
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		// Handle preflight OPTIONS request immediately — no further processing needed.
 		if r.Method == http.MethodOptions {
