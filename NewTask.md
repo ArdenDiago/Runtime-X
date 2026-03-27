@@ -1,9 +1,9 @@
-# Runtime-X Task Description: Feature Implementation
+# NewTask: Implementation of Person A Features
 
-This document outlines the required changes to implement two new features for the Runtime-X project on the `Sooryananda_2547147` branch. 
+This document outlines the required changes to implement two new features for the Runtime-X project on the `Sooryananda_2547147` branch.
 
 ## 1. API Request Logging Middleware
-**Description:** A middleware that logs every incoming HTTP request method, path, and duration.
+**Goal:** Track every incoming HTTP request to the API with its method, URL path, and processing duration.
 **Target File:** `internal/api/server.go`
 
 ### Implementation Steps:
@@ -34,7 +34,7 @@ func (s *Server) Routes() http.Handler {
 ```
 
 ## 2. Case-Insensitive Process Search
-**Description:** Enhance `GET /api/processes` to support a query parameter (e.g., `?q=web`) for filtering.
+**Goal:** Add a search capability to the `GET /api/processes` endpoint using a query parameter.
 **Target File:** `internal/api/handlers.go`
 
 ### Implementation Steps:
@@ -68,7 +68,8 @@ func (s *Server) ListProcesses(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-## Execution Instructions for AI Agents
-- Verify that `Sooryananda_2547147` is checked out safely.
-- Make the modifications clearly and verify that import references are complete.
-- Do not remove any existing routes or handlers; only wrap the multiplexer and modify iteration logic as described.
+## Instructions for AI Agent
+*   Maintain the existing code style and naming conventions.
+*   Ensure that `internal/api/server.go` and `internal/api/handlers.go` are the only files modified unless imports need adjustment.
+*   Use standard library packages (`time`, `strings`, `log` or `fmt`) for implementation.
+*   Run tests in `internal/api/handlers_test.go` after changes to ensure no regressions.
